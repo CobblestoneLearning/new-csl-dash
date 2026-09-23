@@ -1674,6 +1674,15 @@ function observeReveals() {
     });
   }, { rootMargin: '0px 0px -8% 0px', threshold: 0.05 });
   nodes.forEach(function (n) { io.observe(n); });
+
+  /* Safety net: a missed animation is nothing, invisible content is everything.
+     Observers can stay quiet in a backgrounded or throttled tab, so reveal
+     anything still hidden after a beat regardless. */
+  setTimeout(function () {
+    nodes.forEach(function (n) {
+      if (n.getAttribute('data-in') !== '1') { n.setAttribute('data-in', '1'); io.unobserve(n); }
+    });
+  }, 1600);
 }
 
 function syncHeaderHeight() {
