@@ -135,6 +135,13 @@ repo. See `CLAUDE.md` for the generator.
 
 ## Deploying
 
-Commit to `main` and push. GitHub Pages serves `main` at `/new-csl-dash/`; there is no CI stage.
+```bash
+./tools/bump-assets.sh   # stamps assets/*.css|js with a content hash
+git commit -am "…" && git push
+```
+
+GitHub Pages serves `main` at `/new-csl-dash/`; there is no CI stage. The bump step matters:
+Pages sends `cache-control: max-age=600`, so without a fresh hash in the URL a browser keeps
+running the previous CSS/JS for ten minutes after you deploy.
 
 *Learning. Creativity. Trust.*

@@ -19,7 +19,11 @@ charts, auth or the data model — several decisions there are deliberate and no
 
 ## Deploying / previewing
 
-- **Deploy:** commit to `main` and push. Pages serves `main` at `/new-csl-dash/`; no CI stage.
+- **Deploy:** run `./tools/bump-assets.sh`, then commit to `main` and push. Pages serves `main`
+  at `/new-csl-dash/`; no CI stage.
+- **Always run `tools/bump-assets.sh` after touching `assets/`.** Pages serves assets with
+  `cache-control: max-age=600`, so without a new content hash in the URL, browsers keep running
+  the old CSS/JS for ten minutes and you will debug a deploy that already worked.
 - **Local:** open `index.html` or `python3 -m http.server`. It also resolves under MAMP at
   `http://localhost:8888/Cobblestone/new-csl-dash/`.
 - Unauthenticated you only get the 5 public repos — **not enough to judge any layout decision.**
@@ -39,6 +43,7 @@ gh api "/user/repos?per_page=100&visibility=all&affiliation=owner&page=2" > /tmp
 ```
 
 Regenerate `preview-offline.html` after **any** edit to `index.html` — it is a copy, not a link.
+`tools/bump-assets.sh` does this for you.
 
 ## Architecture
 
@@ -64,6 +69,10 @@ To file a project: add a `cat-<id>` topic on GitHub *or* a `CURATED` line. Prefe
 - **No Tailwind.** Don't reintroduce it. The CSS is hand-written against tokens.
 - **`[hidden] { display: none !important; }` is load-bearing** — `.btn` is `inline-flex`, which
   otherwise beats the `hidden` attribute and leaves the signed-out button visible while signed in.
+- **Nothing that matters may depend on an animation.** `.reveal` hiding is scoped to `.js`, set
+  inline before first paint; a backgrounded tab skips the choreography entirely (IntersectionObserver
+  reports nothing and timers are throttled when a tab is hidden). Screenshots of a hidden tab show a
+  stale frame — check `getComputedStyle(...).opacity`, not pixels, when verifying this.
 - **`countUp()` writes the final value before animating.** `requestAnimationFrame` is throttled
   in background tabs; without that the hero figures render as "—" forever. Don't "simplify" it.
 - **Never add a time-series chart** of repo creation or pushes. 89 of 109 repos were bulk-imported
