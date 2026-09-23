@@ -21,14 +21,31 @@ The account grew from ~19 repositories to **109**, and the v1 page broke in thre
 
 ## What this version does
 
-- **The Mortarboard** — the hero is a WebGL scene of the Cobblestone mark itself. The logo is a
-  graduation cap paved with cobblestones, so the cap is paved here with the repositories: one
-  stone each, footprint and height from bytes of source, colour from type, districts from type,
-  tint from how recently it was pushed. Hover a stone for the repo, click to open it, and
-  **search to lift the matches out of the paving** — type `learndash` and 44 stones rise while
-  the rest grey off. Nothing in the geometry is decorative: delete a repo and a stone goes.
-- **A flat tile map** below keeps the same information in a precise, keyboard-reachable grid,
-  and is what you get when WebGL isn't available.
+**Two modes, switched in the header.**
+
+**Estate** (default) is a navigable 3D world, not a hero graphic. The Cobblestone mark is a
+graduation cap paved with cobblestones, so here the cap is monumental and you fly over it — one
+stone per repository:
+
+| | |
+|---|---|
+| footprint | squarified treemap area, from bytes of source |
+| height | extrusion, from bytes of source |
+| district | repo type |
+| tint | how recently it was pushed |
+
+- orbit / pan / zoom the whole estate with real camera controls
+- district labels float above their blocks; **repo labels resolve as you descend**
+- click a stone and the camera flies to it, with an inspector panel
+- **search and the matches rise out of the paving under light columns**, and the camera
+  reframes onto them — `learndash` lifts 44 stones and greys the other 65
+- double-click a stone (or click its label) to open its docs
+
+Nothing in the geometry is decorative. Delete a repo and a stone disappears.
+
+**List** is the whole flat page — masthead, charts, the tile map, cards, snippet library,
+preview rail — holding exactly the same data. It's one click away, it's what you get when WebGL
+is unavailable, and it's where the keyboard-driven work happens.
 - **Metrics that survive growth** — repository count, exact source size, platforms integrated,
   and how many things you can open right here. No vanity zeros, no time-series (see below).
 - **Two separate dimensions.** *Type* (plugin / theme / snippet / app / site) drives every chart

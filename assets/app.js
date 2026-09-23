@@ -545,12 +545,13 @@ function enrichLanguages() {
   var paint = debounce(function () {
     renderComposition();
     renderFigures();
+    renderHudFigures();
     renderPreviewStrip();
     if (STATE.view === 'dev') applyFilters();
   }, 180);
 
   var relay = debounce(function () {
-    if (window.CBStage && window.CBStage.setData) window.CBStage.setData(STATE.repos, TYPES);
+    if (window.CBWorld && window.CBWorld.setData) window.CBWorld.setData(STATE.repos, TYPES);
   }, 900);
 
   function pump() {
@@ -1007,7 +1008,14 @@ function applyFilters() {
   });
   var filtering = !!STATE.q || STATE.platform !== 'all' || STATE.type !== 'all' || STATE.purpose !== 'all';
   syncMapToFilter(filtering ? names : null);
-  if (window.CBStage) window.CBStage.setFilter(filtering ? names : null);
+  if (window.CBWorld) window.CBWorld.setFilter(filtering ? names : null);
+  var hr = $('#hud-result');
+  if (hr) {
+    var lit = Object.keys(names).length;
+    hr.textContent = filtering
+      ? (lit + ' of ' + STATE.repos.length + ' repositories lit')
+      : (STATE.repos.length + ' repositories · ' + STATE.projects.length + ' projects, ' + STATE.snippets.length + ' snippets');
+  }
 
   $('#results-count').textContent = list.length === STATE.projects.length
     ? (list.length + ' projects')
@@ -1624,23 +1632,141 @@ function publishData() {
   window.CBData = { repos: STATE.repos, types: TYPES };
   document.dispatchEvent(new CustomEvent('cb:data'));
   /* language enrichment changes stone heights — re-lay when it lands */
-  if (window.CBStage && window.CBStage.setData) {
-    window.CBStage.setData(STATE.repos, TYPES);
+  if (window.CBWorld && window.CBWorld.setData) {
+    window.CBWorld.setData(STATE.repos, TYPES);
   }
+  renderHudFigures();
+  renderHudLegend();
 }
 
 window.CBHub = {
   openRepo: function (name) { openRepo(name); },
   tipFor: function (repo) { return mapTipHtml(repo); },
   showTip: showTip, moveTip: moveTip, hideTip: hideTip,
-  setSearch: function (q) {
-    var el = $('#search');
-    el.value = q; STATE.q = q; STATE.snipQ = q;
-    el.parentNode.setAttribute('data-filled', q ? '1' : '0');
-    $('#snip-search').value = q;
-    applyFilters(); renderSnippets();
+  inspect: renderInspector,
+  worldReady: function () { WORLD_OK = true; renderHudLegend(); renderHudFigures(); },
+  noWorld: function () {
+    WORLD_OK = false;
+    $('#world-boot').innerHTML = '<p>This browser can\u2019t run the 3D estate.</p>' +
+      '<button type="button" class="btn btn-primary btn-sm" id="fallback-list">Browse the list instead</button>';
+    $('#fallback-list').addEventListener('click', function () { setMode('list'); });
   }
 };
+
+/* ============================================================
+   15c. World mode — HUD, legend, inspector
+   ============================================================ */
+var MODE = 'world', WORLD_OK = false;
+
+function setMode(mode) {
+  MODE = mode;
+  document.body.setAttribute('data-mode', mode);
+  $$('#modeswitch button').forEach(function (b) {
+    b.setAttribute('aria-checked', b.getAttribute('data-mode') === mode ? 'true' : 'false');
+  });
+  $('#world').hidden = mode !== 'world';
+  $('#main').hidden = mode !== 'list';
+  try { localStorage.setItem('cb2_mode', mode); } catch (e) {}
+  if (window.CBWorld) window.CBWorld._sync();
+  if (mode === 'world') hideTip();
+}
+
+function renderHudFigures() {
+  var host = $('#hud-figures');
+  if (!host) return;
+  var tb = splitBytes(totalBytes());
+  var cells = [
+    [String(STATE.repos.length), '', 'repositories'],
+    [tb.val, tb.unit, 'of source'],
+    [String(Object.keys(platformCounts()).length), '', 'platforms'],
+    [String(openableCount()), '', 'open here']
+  ];
+  host.innerHTML = cells.map(function (c) {
+    return '<div class="hud-fig"><span class="hud-fig-v">' + esc(c[0]) +
+      (c[1] ? '<i>' + esc(c[1]) + '</i>' : '') + '</span>' +
+      '<span class="hud-fig-l">' + esc(c[2]) + '</span></div>';
+  }).join('');
+}
+
+function renderHudLegend() {
+  var host = $('#hud-legend');
+  if (!host) return;
+  var counts = typeCounts();
+  host.innerHTML = TYPES.filter(function (t) { return counts[t.id]; }).map(function (t) {
+    return '<button type="button" class="hud-chip" data-type="' + esc(t.id) + '" ' +
+      'aria-pressed="' + (STATE.type === t.id) + '">' +
+      '<span class="hud-swatch" style="background:' + t.color + '"></span>' +
+      esc(t.label) + '<span class="hud-n">' + counts[t.id] + '</span></button>';
+  }).join('');
+  $$('.hud-chip', host).forEach(function (b) {
+    b.addEventListener('click', function () {
+      var v = b.getAttribute('data-type');
+      STATE.type = (STATE.type === v) ? 'all' : v;
+      renderHudLegend(); renderChips(); applyFilters(); syncPortfolioPressed();
+    });
+  });
+}
+
+function renderInspector(repo) {
+  var el = $('#inspector');
+  if (!el) return;
+  if (!repo) { el.hidden = true; el.innerHTML = ''; return; }
+  var t = TYPE_BY_ID[repo.type] || TYPES[0];
+  el.hidden = false;
+  el.innerHTML =
+    '<button type="button" class="insp-close" aria-label="Close">' + svg(ICON.close, 15) + '</button>' +
+    '<p class="insp-kicker"><span class="hud-swatch" style="background:' + t.color + '"></span>' +
+      esc(t.label.replace(/s$/, '')) + (repo.isPrivate ? ' · private' : '') + '</p>' +
+    '<h3 class="insp-name">' + esc(repo.isSnippet ? repo.label : repo.name) + '</h3>' +
+    '<p class="insp-desc">' + esc(repo.desc || 'No description on GitHub yet.') + '</p>' +
+    '<div class="insp-grid">' +
+      '<div><span>Code</span><b>' + esc(fmtBytes(repo.bytes)) + '</b></div>' +
+      '<div><span>Language</span><b>' + esc(repo.lang || '\u2014') + '</b></div>' +
+      '<div><span>Updated</span><b>' + esc(timeAgo(repo.pushed)) + '</b></div>' +
+    '</div>' +
+    (repo.platforms.length ? '<div class="insp-works">' + repo.platforms.map(function (p) {
+      return '<span class="pill pill-works">' + esc(labelForPlatform(p)) + '</span>';
+    }).join('') + '</div>' : '') +
+    '<div class="insp-actions">' +
+      '<button type="button" class="btn btn-primary btn-sm" data-open="' + esc(repo.name) + '">Open docs</button>' +
+      (repo.demo ? '<button type="button" class="btn btn-outline btn-sm" data-demo="' + esc(repo.name) + '">Demo</button>' : '') +
+      '<a class="btn btn-ghost btn-sm" href="' + esc(repo.url) + '" target="_blank" rel="noopener noreferrer">GitHub' + svg(ICON.ext, 12) + '</a>' +
+    '</div>';
+  $('.insp-close', el).addEventListener('click', function () {
+    renderInspector(null);
+    if (window.CBWorld) window.CBWorld._select(-1);
+  });
+  wireCards(el);
+}
+
+function wireWorldHud() {
+  $$('#modeswitch button').forEach(function (b) {
+    b.addEventListener('click', function () { setMode(b.getAttribute('data-mode')); });
+  });
+  $('#world-reset').addEventListener('click', function () {
+    if (window.CBWorld) window.CBWorld.resetView();
+  });
+
+  var ws = $('#world-search'), wc = $('#world-search-clear');
+  var run = debounce(function () {
+    var q = ws.value.trim();
+    wc.hidden = !q;
+    STATE.q = q; STATE.snipQ = q;
+    $('#search').value = q;
+    $('#search').parentNode.setAttribute('data-filled', q ? '1' : '0');
+    $('#snip-search').value = q;
+    applyFilters(); renderSnippets();
+  }, 200);
+  ws.addEventListener('input', run);
+  wc.addEventListener('click', function () { ws.value = ''; wc.hidden = true; run(); ws.focus(); });
+
+  document.addEventListener('keydown', function (e) {
+    if (e.key === 'Escape' && MODE === 'world' && $('#modal').getAttribute('data-open') !== '1') {
+      renderInspector(null);
+      if (window.CBWorld) window.CBWorld._select(-1);
+    }
+  });
+}
 
 /* ============================================================
    16. Tooltip
@@ -1778,6 +1904,10 @@ document.addEventListener('DOMContentLoaded', function () {
   } catch (e) {}
 
   $('#year').textContent = new Date().getFullYear();
+  var savedMode = 'world';
+  try { var m = localStorage.getItem('cb2_mode'); if (m === 'world' || m === 'list') savedMode = m; } catch (e) {}
+  wireWorldHud();
+  setMode(savedMode);
   applyViewUI();
   wireAuth();
   wireControls();

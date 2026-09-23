@@ -13,7 +13,7 @@
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
 <link rel="preconnect" href="https://api.github.com" crossorigin />
 <link href="https://fonts.googleapis.com/css2?family=Montserrat:wght@300;400;500;600;700;800&display=swap" rel="stylesheet" />
-<link rel="stylesheet" href="assets/theme.css?v=8721826a" />
+<link rel="stylesheet" href="assets/theme.css?v=3c535986" />
 <script>document.documentElement.className += " js";</script>
 </head>
 <body>
@@ -39,6 +39,16 @@
     </div>
     <span class="header-spacer"></span>
     <div class="header-actions">
+      <div class="modeswitch" id="modeswitch" role="radiogroup" aria-label="How to browse">
+        <button type="button" role="radio" data-mode="world" aria-checked="true">
+          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M2 12h20"/><path d="M12 2a15 15 0 0 1 0 20 15 15 0 0 1 0-20z"/><circle cx="12" cy="12" r="10"/></svg>
+          Estate
+        </button>
+        <button type="button" role="radio" data-mode="list" aria-checked="false">
+          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><line x1="8" y1="6" x2="21" y2="6"/><line x1="8" y1="12" x2="21" y2="12"/><line x1="8" y1="18" x2="21" y2="18"/><line x1="3" y1="6" x2="3.01" y2="6"/><line x1="3" y1="12" x2="3.01" y2="12"/><line x1="3" y1="18" x2="3.01" y2="18"/></svg>
+          List
+        </button>
+      </div>
       <button type="button" class="kbd-hint" id="palette-open" aria-label="Open quick search">
         <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" aria-hidden="true"><circle cx="11" cy="11" r="7"/><line x1="21" y1="21" x2="16.65" y2="16.65"/></svg>
         Jump to… <kbd>⌘K</kbd>
@@ -56,11 +66,50 @@
   </div>
 </header>
 
-<main>
+<!-- ================= THE ESTATE (world mode) ================= -->
+<div class="world" id="world">
+  <div class="world-host" id="world-host"></div>
+
+  <div class="world-boot" id="world-boot">
+    <div class="loader-ring" aria-hidden="true"></div>
+    <p>Laying the estate…</p>
+  </div>
+
+  <div class="hud" id="hud">
+    <div class="hud-tl">
+      <label class="hud-search">
+        <span class="sr-only">Search the estate</span>
+        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" aria-hidden="true"><circle cx="11" cy="11" r="7"/><line x1="21" y1="21" x2="16.65" y2="16.65"/></svg>
+        <input type="search" id="world-search" autocomplete="off"
+               placeholder="Search — watch the matches rise…" />
+        <button type="button" id="world-search-clear" aria-label="Clear search" hidden>
+          <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" aria-hidden="true"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>
+        </button>
+      </label>
+      <p class="hud-result" id="hud-result"></p>
+    </div>
+
+    <div class="hud-tr" id="hud-legend" role="group" aria-label="Filter by type"></div>
+
+    <div class="hud-bl" id="hud-figures"></div>
+
+    <div class="hud-br">
+      <button type="button" class="hud-btn" id="world-reset">
+        <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M3 12a9 9 0 1 0 3-6.7"/><polyline points="3 3 3 9 9 9"/></svg>
+        Reset view
+      </button>
+      <p class="hud-help">drag to orbit · scroll to zoom · click a stone · double-click to open</p>
+    </div>
+  </div>
+
+  <aside class="inspector" id="inspector" aria-live="polite" hidden></aside>
+</div>
+
+<main id="main">
 
 <!-- ================= MASTHEAD ================= -->
 <section class="wrap masthead">
-  <div class="masthead-grid">
+  <div class="masthead-grid masthead-grid--solo">
     <div class="masthead-copy">
       <p class="eyebrow eyebrow--accent reveal">Cobblestone Learning · internal</p>
       <h1 class="reveal">Everything <em>we&#8217;ve built.</em></h1>
@@ -75,14 +124,6 @@
       </p>
     </div>
 
-    <div class="stage-wrap reveal">
-      <div class="stage-host" id="stage" role="img"
-           aria-label="The Cobblestone graduation-cap mark, paved with one stone per repository. Each stone's size and height show how much code that repository holds; its colour shows the kind of project. The same information is listed below as text."></div>
-      <div class="stage-cap">
-        <span class="stage-dot" aria-hidden="true"></span>
-        <span id="stage-note">one stone per repository · size &amp; height are code · colour is type</span>
-      </div>
-    </div>
   </div>
 
   <div class="figures reveal">
@@ -372,30 +413,34 @@
 </div>
 
 <script src="assets/config.js?v=84643cce"></script>
-<script src="assets/app.js?v=136a5b66"></script>
+<script src="assets/app.js?v=49f2e15b"></script>
+<script type="importmap">
+{ "imports": { "three": "./assets/vendor/three.module.min.js" } }
+</script>
 <script type="module">
-  /* Progressive enhancement: if WebGL is unavailable or three.js fails to
-     load, the page is untouched and the tile map carries the same data. */
-  import { mountStage } from './assets/stage.js?v=2af5a7e5';
+  /* Progressive enhancement: no WebGL (or a module that throws) drops the
+     page straight into List mode, which holds all the same data. */
+  import { mountWorld } from './assets/world.js?v=acbbd369';
 
-  const host = document.getElementById('stage');
-  let stage = null;
+  const host = document.getElementById('world-host');
+  let world = null;
 
   function boot() {
-    if (stage || !window.CBData || !window.CBData.repos.length) return;
-    stage = mountStage(host, {
+    if (world || !window.CBData || !window.CBData.repos.length) return;
+    world = mountWorld(host, {
       onPick(name) { window.CBHub.openRepo(name); },
+      onSelect(repo) { window.CBHub.inspect(repo); },
       onHover(repo, ev) {
         if (!repo || !ev) { window.CBHub.hideTip(); return; }
         window.CBHub.showTip(ev, window.CBHub.tipFor(repo));
         window.CBHub.moveTip(ev);
-      }
+      },
+      onReady() { document.getElementById('world-boot').hidden = true; }
     });
-    const wrap = host.closest('.stage-wrap');
-    if (!stage) { wrap.setAttribute('data-nogl', '1'); return; }
-    stage.setData(window.CBData.repos, window.CBData.types);
-    wrap.setAttribute('data-live', '1');
-    window.CBStage = stage;
+    if (!world) { window.CBHub.noWorld(); return; }
+    world.setData(window.CBData.repos, window.CBData.types);
+    window.CBWorld = world;
+    window.CBHub.worldReady();
   }
 
   document.addEventListener('cb:data', boot);

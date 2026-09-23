@@ -55,8 +55,13 @@ No build step, no package manager, no server code.
 | `assets/theme.css` | The whole design system. Tokens in `:root`; everything else is a component class. |
 | `assets/config.js` | **Data, not logic.** Types, purposes, platforms, sites, `CURATED`, palettes, `AUTH_CONFIG`. |
 | `assets/app.js` | All behaviour, one IIFE, numbered sections. |
-| `assets/stage.js` | WebGL mortarboard. **ES module** — talks to app.js via `window.CBHub` + the `cb:data` event, never an import. |
-| `assets/vendor/` | three.js r169, vendored on purpose. Don't swap it for a CDN tag. |
+| `assets/world.js` | The Estate: navigable WebGL world. **ES module** — talks to app.js via `window.CBHub` + the `cb:data` event, never an import. |
+| `assets/vendor/` | three.js r169 + OrbitControls / CSS2DRenderer / RoomEnvironment, vendored on purpose. Don't swap for CDN tags. |
+
+**Two modes.** `body[data-mode]` is `world` or `list`; `setMode()` in app.js owns it. World mode
+hides `#main` and shows `#world`; List mode is the entire flat page and must always hold the same
+data. Bare `three` resolves through the `<script type="importmap">` in index.html — the addons all
+import from that bare specifier, so don't rewrite them to relative paths.
 
 **Two orthogonal dimensions — don't merge them:**
 - **TYPE** (`plugin` / `snippet` / `theme` / `app` / `site`) → the colour in every chart and on
@@ -71,8 +76,12 @@ To file a project: add a `cat-<id>` topic on GitHub *or* a `CURATED` line. Prefe
 - **No Tailwind.** Don't reintroduce it. The CSS is hand-written against tokens.
 - **`[hidden] { display: none !important; }` is load-bearing** — `.btn` is `inline-flex`, which
   otherwise beats the `hidden` attribute and leaves the signed-out button visible while signed in.
-- **The stage is optional, always.** `mountStage()` returns null with no WebGL and the page must
-  be completely unaffected. Never move data or controls into `stage.js` that exist only there.
+- **The world is optional, always.** `mountWorld()` returns null with no WebGL, and List mode must
+  still be complete. Never let a control or a piece of data live only inside `world.js`.
+- **Search lifts, it doesn't hide.** Non-matches sink and grey; they stay on the board so you keep
+  the sense of scale. Light columns are short, faint and alpha-ramped — additive columns at full
+  height stacked to pure white wherever several overlapped and wiped out the scene.
+- **Stone labels are capped at 26 nearest.** 109 labels at once is confetti, not navigation.
 - **Stone heights use a power curve (`^0.34`), not a log.** A log compresses 12 KB and 4 MB to
   nearly the same height and the 65-snippet district renders as one flat blue slab — the very
   thing this rebuild exists to fix.
