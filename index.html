@@ -13,12 +13,20 @@
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
 <link rel="preconnect" href="https://api.github.com" crossorigin />
 <link href="https://fonts.googleapis.com/css2?family=Montserrat:wght@300;400;500;600;700;800&display=swap" rel="stylesheet" />
-<link rel="stylesheet" href="assets/theme.css?v=1ac5907b" />
+<link rel="stylesheet" href="assets/theme.css?v=8721826a" />
 <script>document.documentElement.className += " js";</script>
 </head>
 <body>
 
 <a class="skip-link" href="#projects">Skip to projects</a>
+
+<!-- atmosphere: fixed, inert, purely optical -->
+<div class="atmos" aria-hidden="true">
+  <div class="atmos-spot"></div>
+  <div class="atmos-cobbles"></div>
+  <div class="atmos-vignette"></div>
+</div>
+<div class="topglow" aria-hidden="true"></div>
 
 <!-- ================= HEADER ================= -->
 <header class="site-header" id="site-header">
@@ -57,60 +65,48 @@
       <p class="eyebrow eyebrow--accent reveal">Cobblestone Learning · internal</p>
       <h1 class="reveal">Everything <em>we&#8217;ve built.</em></h1>
       <p class="masthead-lede reveal">
-        Every plugin, theme, snippet and tool on the <strong>cobblestonelearning</strong> account —
-        what it does, what it plugs into, and where to open it. Public repositories load for
-        everyone; <strong>sign in with GitHub</strong> to include the private estate.
+        The Cobblestone mark is a graduation cap paved with cobblestones. So is this —
+        every stone is one repository, sized and raised by how much code is in it.
+        Hover one, or search, and the estate answers.
       </p>
-
-  <div class="figures reveal">
-        <div class="figure">
-          <div class="figure-val"><span id="fig-repos">—</span></div>
-          <div class="figure-label">Repositories</div>
-          <div class="figure-sub" id="fig-repos-sub">loading…</div>
-        </div>
-        <div class="figure">
-          <div class="figure-val"><span id="fig-code">—</span><span class="figure-unit" id="fig-code-unit"></span></div>
-          <div class="figure-label">Source code</div>
-          <div class="figure-sub" id="fig-code-sub">measuring…</div>
-        </div>
-        <div class="figure">
-          <div class="figure-val"><span id="fig-platforms">—</span></div>
-          <div class="figure-label">Platforms integrated</div>
-          <div class="figure-sub" id="fig-platforms-sub">across the estate</div>
-        </div>
-        <div class="figure">
-          <div class="figure-val"><span id="fig-open">—</span></div>
-          <div class="figure-label">Open right here</div>
-          <div class="figure-sub" id="fig-open-sub">demos and published pages</div>
-        </div>
-      </div>
+      <p class="masthead-lede reveal" style="margin-top:14px">
+        Public repositories load for everyone; <strong>sign in with GitHub</strong>
+        to lay the private estate into the cap too.
+      </p>
     </div>
 
-    <div class="reveal">
-      <article class="panel map-panel">
-        <div class="panel-head">
-          <div>
-            <h3 class="panel-title">The map</h3>
-            <p class="panel-note" id="map-note">loading…</p>
-          </div>
-        </div>
-        <div class="panel-body">
-          <div class="map-groups" id="map-groups"></div>
-          <div class="map-foot">
-            <span class="map-scale">
-              <span>Older</span>
-              <span class="map-scale-swatches" aria-hidden="true">
-                <i style="opacity:.32"></i><i style="opacity:.52"></i><i style="opacity:.76"></i><i style="opacity:1"></i>
-              </span>
-              <span>Recently updated</span>
-            </span>
-            <span>Colour = type · a dot means you can open it here</span>
-          </div>
-        </div>
-      </article>
+    <div class="stage-wrap reveal">
+      <div class="stage-host" id="stage" role="img"
+           aria-label="The Cobblestone graduation-cap mark, paved with one stone per repository. Each stone's size and height show how much code that repository holds; its colour shows the kind of project. The same information is listed below as text."></div>
+      <div class="stage-cap">
+        <span class="stage-dot" aria-hidden="true"></span>
+        <span id="stage-note">one stone per repository · size &amp; height are code · colour is type</span>
+      </div>
     </div>
   </div>
 
+  <div class="figures reveal">
+    <div class="figure">
+      <div class="figure-val"><span id="fig-repos">—</span></div>
+      <div class="figure-label">Repositories</div>
+      <div class="figure-sub" id="fig-repos-sub">loading…</div>
+    </div>
+    <div class="figure">
+      <div class="figure-val"><span id="fig-code">—</span><span class="figure-unit" id="fig-code-unit"></span></div>
+      <div class="figure-label">Source code</div>
+      <div class="figure-sub" id="fig-code-sub">measuring…</div>
+    </div>
+    <div class="figure">
+      <div class="figure-val"><span id="fig-platforms">—</span></div>
+      <div class="figure-label">Platforms integrated</div>
+      <div class="figure-sub" id="fig-platforms-sub">across the estate</div>
+    </div>
+    <div class="figure">
+      <div class="figure-val"><span id="fig-open">—</span></div>
+      <div class="figure-label">Open right here</div>
+      <div class="figure-sub" id="fig-open-sub">demos and published pages</div>
+    </div>
+  </div>
 </section>
 
 <!-- ================= THE INDEX (analysis panels) ================= -->
@@ -150,6 +146,28 @@
         </div>
       </article>
 
+      <article class="panel map-panel" id="map-panel" style="grid-column:1 / -1">
+        <div class="panel-head">
+          <div>
+            <h3 class="panel-title">Every repository, one tile each</h3>
+            <p class="panel-note" id="map-note">loading…</p>
+          </div>
+        </div>
+        <div class="panel-body">
+          <div class="map-groups" id="map-groups"></div>
+          <div class="map-foot">
+            <span class="map-scale">
+              <span>Older</span>
+              <span class="map-scale-swatches" aria-hidden="true">
+                <i style="opacity:.32"></i><i style="opacity:.52"></i><i style="opacity:.76"></i><i style="opacity:1"></i>
+              </span>
+              <span>Recently updated</span>
+            </span>
+            <span>Colour = type · a dot means you can open it here</span>
+          </div>
+        </div>
+      </article>
+
       <article class="panel">
         <div class="panel-head">
           <div>
@@ -170,6 +188,20 @@
         <div class="panel-body"><div class="rank" id="site-rank"></div></div>
       </article>
     </div>
+  </div>
+</section>
+
+<!-- ================= PREVIEW STRIP ================= -->
+<section class="band preview-band" id="preview-band" hidden>
+  <div class="wrap preview-head">
+    <div>
+      <p class="eyebrow">Open without leaving</p>
+      <h2 style="font-size:clamp(20px,2.4vw,26px);font-weight:800;margin-top:6px">Running demos &amp; live pages</h2>
+    </div>
+    <p class="results-count" id="preview-count">—</p>
+  </div>
+  <div class="preview-rail">
+    <div class="preview-track" id="preview-track"></div>
   </div>
 </section>
 
@@ -340,6 +372,34 @@
 </div>
 
 <script src="assets/config.js?v=84643cce"></script>
-<script src="assets/app.js?v=5fe73be6"></script>
+<script src="assets/app.js?v=136a5b66"></script>
+<script type="module">
+  /* Progressive enhancement: if WebGL is unavailable or three.js fails to
+     load, the page is untouched and the tile map carries the same data. */
+  import { mountStage } from './assets/stage.js?v=2af5a7e5';
+
+  const host = document.getElementById('stage');
+  let stage = null;
+
+  function boot() {
+    if (stage || !window.CBData || !window.CBData.repos.length) return;
+    stage = mountStage(host, {
+      onPick(name) { window.CBHub.openRepo(name); },
+      onHover(repo, ev) {
+        if (!repo || !ev) { window.CBHub.hideTip(); return; }
+        window.CBHub.showTip(ev, window.CBHub.tipFor(repo));
+        window.CBHub.moveTip(ev);
+      }
+    });
+    const wrap = host.closest('.stage-wrap');
+    if (!stage) { wrap.setAttribute('data-nogl', '1'); return; }
+    stage.setData(window.CBData.repos, window.CBData.types);
+    wrap.setAttribute('data-live', '1');
+    window.CBStage = stage;
+  }
+
+  document.addEventListener('cb:data', boot);
+  boot();
+</script>
 </body>
 </html>

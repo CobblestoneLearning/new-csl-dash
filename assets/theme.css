@@ -796,3 +796,145 @@ kbd {
   }
   .js .reveal { opacity: 1; transform: none; }
 }
+
+/* ===================================================================
+   20. THE STAGE — WebGL mortarboard + its atmosphere
+   =================================================================== */
+
+/* ---- atmosphere (fixed, inert) ---- */
+.atmos { position: fixed; inset: 0; z-index: 0; pointer-events: none; }
+.atmos-spot {
+  position: absolute; inset: -12vmax;
+  background:
+    radial-gradient(48vmax 40vmax at 62% -8%, rgba(39,170,225,.16), transparent 62%),
+    radial-gradient(42vmax 38vmax at 8% 6%, rgba(0,116,180,.08), transparent 62%),
+    radial-gradient(38vmax 38vmax at 92% 26%, rgba(255,194,14,.055), transparent 62%);
+  filter: blur(6px);
+}
+.atmos-vignette {
+  position: absolute; inset: 0;
+  background: radial-gradient(130% 96% at 50% 30%, transparent 58%, rgba(61,61,61,.07) 100%);
+}
+/* The logo's paving, drifting — the mark's own texture as wallpaper. */
+.atmos-cobbles {
+  position: absolute; inset: -60px;
+  opacity: .5;
+  background-image:
+    linear-gradient(90deg, rgba(61,61,61,.055) 22px, transparent 22px),
+    linear-gradient(0deg,  rgba(61,61,61,.045) 14px, transparent 14px),
+    linear-gradient(90deg, rgba(39,170,225,.05) 40px, transparent 40px);
+  background-size: 34px 22px, 22px 34px, 118px 74px;
+  animation: cobble-drift 90s linear infinite;
+  -webkit-mask-image: radial-gradient(70% 56% at 50% 12%, #000 0%, transparent 78%);
+  mask-image: radial-gradient(70% 56% at 50% 12%, #000 0%, transparent 78%);
+}
+@keyframes cobble-drift {
+  to { background-position: 340px 220px, -220px 340px, 472px 296px; }
+}
+.topglow {
+  position: fixed; top: 0; left: 0; right: 0; height: 2px; z-index: 70; pointer-events: none;
+  background: linear-gradient(90deg, transparent, var(--cyan) 34%, var(--blue) 66%, transparent);
+  opacity: .8;
+}
+/* Everything real sits above the atmosphere. */
+.site-header, main, .site-footer, .controls { position: relative; z-index: 10; }
+
+/* ---- stage ---- */
+.stage-wrap { position: relative; }
+.stage-host {
+  width: 100%;
+  height: clamp(340px, 42vw, 560px);
+  touch-action: pan-y;
+  cursor: grab;
+}
+.stage-host canvas { border-radius: var(--r-lg); }
+.stage-cap {
+  display: flex; align-items: center; gap: 9px; justify-content: center;
+  margin-top: 4px; font-size: 12px; font-weight: 500; color: var(--muted);
+  text-align: center;
+}
+.stage-dot {
+  width: 7px; height: 7px; border-radius: 50%; background: var(--cyan); flex: none;
+  box-shadow: 0 0 0 0 rgba(39,170,225,.55);
+  animation: stage-pulse 2.6s var(--ease) infinite;
+}
+@keyframes stage-pulse {
+  0%   { box-shadow: 0 0 0 0 rgba(39,170,225,.5); }
+  70%  { box-shadow: 0 0 0 9px rgba(39,170,225,0); }
+  100% { box-shadow: 0 0 0 0 rgba(39,170,225,0); }
+}
+/* Before WebGL reports in, hold the space with a breathing placeholder
+   rather than a jump. */
+.stage-wrap:not([data-live]) .stage-host {
+  border-radius: var(--r-lg);
+  background:
+    radial-gradient(60% 50% at 50% 42%, rgba(39,170,225,.09), transparent 70%),
+    var(--canvas);
+}
+.stage-wrap[data-nogl] .stage-host { display: none; }
+.stage-wrap[data-nogl] .stage-cap::after {
+  content: 'Your browser can’t run the 3D stage — the full tile map is below.';
+}
+.stage-wrap[data-nogl] #stage-note { display: none; }
+
+/* ---- preview rail ---- */
+.preview-band { background: var(--surface); overflow: hidden; }
+.preview-head {
+  display: flex; align-items: flex-end; justify-content: space-between;
+  gap: 16px; flex-wrap: wrap; padding-block: clamp(28px,4vw,44px) 18px;
+}
+.preview-rail {
+  overflow-x: auto; overflow-y: hidden; padding: 4px 0 clamp(28px,4vw,44px);
+  scrollbar-width: none; -webkit-overflow-scrolling: touch;
+  -webkit-mask-image: linear-gradient(90deg, transparent, #000 3%, #000 97%, transparent);
+  mask-image: linear-gradient(90deg, transparent, #000 3%, #000 97%, transparent);
+}
+.preview-rail::-webkit-scrollbar { display: none; }
+.preview-track {
+  display: flex; gap: 16px; width: max-content; padding-inline: var(--gutter);
+  animation: rail 68s linear infinite;
+}
+.preview-rail:hover .preview-track,
+.preview-rail:focus-within .preview-track { animation-play-state: paused; }
+@keyframes rail { to { transform: translateX(-50%); } }
+@media (prefers-reduced-motion: reduce) { .preview-track { animation: none; } }
+
+.pv-card {
+  flex: none; width: 216px; text-align: left; border: 1px solid var(--line);
+  border-radius: var(--r-lg); background: var(--surface); padding: 12px 12px 14px;
+  transition: transform .2s var(--ease), box-shadow .2s var(--ease), border-color .2s var(--ease);
+}
+.pv-card:hover { transform: translateY(-4px); box-shadow: var(--shadow-2); border-color: #D8E0E9; }
+.pv-art {
+  display: block; position: relative; height: 104px; border-radius: var(--r);
+  overflow: hidden; margin-bottom: 11px;
+  background: linear-gradient(145deg, var(--pv), rgba(0,0,0,.22)), var(--pv);
+}
+.pv-art-grid {
+  position: absolute; inset: 0; opacity: .42;
+  background-image:
+    linear-gradient(90deg, rgba(255,255,255,.5) 12px, transparent 12px),
+    linear-gradient(0deg,  rgba(255,255,255,.28) 8px, transparent 8px);
+  background-size: 19px 13px, 13px 19px;
+  transform: rotate(-8deg) scale(1.3);
+}
+.pv-art-kind {
+  position: absolute; left: 9px; bottom: 9px;
+  font-size: 9.5px; font-weight: 700; letter-spacing: .09em; text-transform: uppercase;
+  color: #fff; background: rgba(0,0,0,.30); backdrop-filter: blur(3px);
+  padding: 3px 8px; border-radius: var(--r-pill);
+}
+.pv-name {
+  display: block; font-size: 13.5px; font-weight: 700; letter-spacing: -.01em;
+  overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+}
+.pv-desc {
+  display: -webkit-box; -webkit-line-clamp: 2; line-clamp: 2; -webkit-box-orient: vertical;
+  overflow: hidden; margin-top: 4px; font-size: 12px; color: var(--muted); line-height: 1.45;
+}
+
+/* The stage earns the wider half of the masthead. */
+@media (min-width: 1101px) {
+  .masthead-grid { grid-template-columns: minmax(0, 430px) minmax(0, 1fr); }
+  .figures { grid-template-columns: repeat(4, minmax(0, 1fr)); }
+}

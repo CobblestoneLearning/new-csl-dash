@@ -21,9 +21,14 @@ The account grew from ~19 repositories to **109**, and the v1 page broke in thre
 
 ## What this version does
 
-- **A masthead built on the Map** — one tile per repository, grouped by type, shaded by how
-  recently it was pushed. Search or filter and the map dims to match, so typing `learndash`
-  lights up the estate instantly. Click a tile to open that project.
+- **The Mortarboard** — the hero is a WebGL scene of the Cobblestone mark itself. The logo is a
+  graduation cap paved with cobblestones, so the cap is paved here with the repositories: one
+  stone each, footprint and height from bytes of source, colour from type, districts from type,
+  tint from how recently it was pushed. Hover a stone for the repo, click to open it, and
+  **search to lift the matches out of the paving** — type `learndash` and 44 stones rise while
+  the rest grey off. Nothing in the geometry is decorative: delete a repo and a stone goes.
+- **A flat tile map** below keeps the same information in a precise, keyboard-reachable grid,
+  and is what you get when WebGL isn't available.
 - **Metrics that survive growth** — repository count, exact source size, platforms integrated,
   and how many things you can open right here. No vanity zeros, no time-series (see below).
 - **Two separate dimensions.** *Type* (plugin / theme / snippet / app / site) drives every chart
@@ -54,10 +59,26 @@ No build step, no package manager, no server code. Four files:
 | `assets/theme.css` | The whole design system: tokens, components, responsive rules |
 | `assets/config.js` | **Data, not logic** — types, purposes, platforms, sites, `CURATED`, palettes |
 | `assets/app.js` | Everything else, as one IIFE |
+| `assets/stage.js` | The WebGL mortarboard (ES module, three.js) |
+| `assets/vendor/three.module.min.js` | three.js r169, vendored |
 
 v1 was a single 195 KB `index.html`; this is split so the config a human actually edits
 (`CURATED`, `PLATFORMS`) is findable. Tailwind is gone — the CSS is hand-written against
 design tokens, which is smaller and gives exact control over the editorial layout.
+
+**three.js is vendored, not pulled from a CDN.** This page holds an OAuth token, so it takes no
+runtime third-party script it can't pin exactly. `stage.js` is an ES module and loads separately
+from `app.js`; they meet over `window.CBHub` and a `cb:data` event rather than an import, and
+either can arrive first. If WebGL is missing or the module throws, `mountStage()` returns null
+and the page is unaffected.
+
+### The stage's layout
+
+`squarify()` is a standard squarified treemap. It runs twice — once over the type districts, then
+again inside each district over its repos — which is what produces the irregular, hand-laid stone
+pattern the logo has while keeping area proportional to code size. Heights use a `^0.34` power
+curve rather than a log: a log flattened a 12 KB snippet to 65% of a 4 MB repo and the snippet
+district rendered as one blue slab, which was the exact problem this rebuild exists to fix.
 
 ### Adding or re-filing a project
 

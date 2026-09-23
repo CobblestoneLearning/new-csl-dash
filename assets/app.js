@@ -487,7 +487,9 @@ function loadAll() {
     applyFilters();
     renderSnippetFacets();
     renderSnippets();
+    renderPreviewStrip();
     buildPaletteIndex();
+    publishData();
     enrichLanguages();
     loadGists();
   }).catch(function (e) {
@@ -543,14 +545,19 @@ function enrichLanguages() {
   var paint = debounce(function () {
     renderComposition();
     renderFigures();
+    renderPreviewStrip();
     if (STATE.view === 'dev') applyFilters();
   }, 180);
+
+  var relay = debounce(function () {
+    if (window.CBStage && window.CBStage.setData) window.CBStage.setData(STATE.repos, TYPES);
+  }, 900);
 
   function pump() {
     if (idx >= list.length) { renderComposition(); renderFigures(); if (STATE.view === 'dev') applyFilters(); return; }
     var batch = list.slice(idx, idx + CONC);
     idx += CONC;
-    Promise.all(batch.map(one)).then(function () { paint(); pump(); });
+    Promise.all(batch.map(one)).then(function () { paint(); relay(); pump(); });
   }
   pump();
 }
@@ -885,6 +892,7 @@ function renderSites() {
     STATE.snipSite = (STATE.snipSite === key) ? 'all' : key;
     renderSnippetFacets();
     renderSnippets();
+    renderPreviewStrip();
     renderSites();
     document.getElementById('snippets').scrollIntoView({ behavior: 'smooth', block: 'start' });
   }, STATE.snipSite);
@@ -999,6 +1007,7 @@ function applyFilters() {
   });
   var filtering = !!STATE.q || STATE.platform !== 'all' || STATE.type !== 'all' || STATE.purpose !== 'all';
   syncMapToFilter(filtering ? names : null);
+  if (window.CBStage) window.CBStage.setFilter(filtering ? names : null);
 
   $('#results-count').textContent = list.length === STATE.projects.length
     ? (list.length + ' projects')
@@ -1197,6 +1206,44 @@ function renderSnippets() {
       '</button>';
   }).join('');
   wireCards($('#snip-list'));
+}
+
+/* ============================================================
+   12b. Preview strip — the things you can open without leaving
+   ------------------------------------------------------------
+   Marquee of every repo with a demo or a published page. Scrolls
+   itself, pauses on hover, and is still a normal scroll container so
+   it can be dragged or flicked by hand.
+   ============================================================ */
+function renderPreviewStrip() {
+  var host = $('#preview-track');
+  if (!host) return;
+  var list = STATE.repos.filter(function (r) { return r.demo || r.pages || r.homepage; });
+  if (!list.length) {
+    $('#preview-band').hidden = true;
+    return;
+  }
+  $('#preview-band').hidden = false;
+  $('#preview-count').textContent = list.length + ' ready to open';
+
+  /* duplicated once so the marquee can wrap seamlessly */
+  function card(r) {
+    var t = TYPE_BY_ID[r.type] || TYPES[0];
+    var kind = r.demo ? 'Demo' : 'Live page';
+    return '<button type="button" class="pv-card" data-' + (r.demo ? 'demo' : 'open') + '="' + esc(r.name) + '" ' +
+      'style="--pv:' + t.color + '">' +
+      '<span class="pv-art" aria-hidden="true">' +
+        '<span class="pv-art-grid"></span>' +
+        '<span class="pv-art-kind">' + esc(kind) + '</span>' +
+      '</span>' +
+      '<span class="pv-name">' + esc(r.isSnippet ? r.label : r.name) + '</span>' +
+      '<span class="pv-desc">' + esc((r.desc || '').slice(0, 74)) + '</span>' +
+      '</button>';
+  }
+  var html = list.map(card).join('');
+  host.innerHTML = html + html;
+  host.style.setProperty('--pv-n', list.length);
+  wireCards(host);
 }
 
 /* ============================================================
@@ -1565,6 +1612,35 @@ function wirePalette() {
     }
   });
 }
+
+/* ============================================================
+   15b. Bridge to the WebGL stage (assets/stage.js)
+   ------------------------------------------------------------
+   stage.js is an ES module and loads independently of this file, so
+   they meet over window.CBHub + a 'cb:data' event rather than an
+   import. Either can arrive first; both paths are handled.
+   ============================================================ */
+function publishData() {
+  window.CBData = { repos: STATE.repos, types: TYPES };
+  document.dispatchEvent(new CustomEvent('cb:data'));
+  /* language enrichment changes stone heights — re-lay when it lands */
+  if (window.CBStage && window.CBStage.setData) {
+    window.CBStage.setData(STATE.repos, TYPES);
+  }
+}
+
+window.CBHub = {
+  openRepo: function (name) { openRepo(name); },
+  tipFor: function (repo) { return mapTipHtml(repo); },
+  showTip: showTip, moveTip: moveTip, hideTip: hideTip,
+  setSearch: function (q) {
+    var el = $('#search');
+    el.value = q; STATE.q = q; STATE.snipQ = q;
+    el.parentNode.setAttribute('data-filled', q ? '1' : '0');
+    $('#snip-search').value = q;
+    applyFilters(); renderSnippets();
+  }
+};
 
 /* ============================================================
    16. Tooltip

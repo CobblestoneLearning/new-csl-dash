@@ -8,10 +8,10 @@
 set -euo pipefail
 cd "$(dirname "$0")/.."
 
-for f in theme.css config.js app.js; do
+for f in theme.css config.js app.js stage.js; do
   h=$(md5 -q "assets/$f" 2>/dev/null || md5sum "assets/$f" | cut -d' ' -f1)
   h=${h:0:8}
-  perl -pi -e "s{(assets/\Q$f\E)(\?v=[0-9a-f]+)?}{\$1?v=$h}g" index.html
+  perl -pi -e "s{(\./)?(assets/\Q$f\E)(\?v=[0-9a-f]+)?}{\${1}\$2?v=$h}g" index.html
   echo "  assets/$f -> ?v=$h"
 done
 

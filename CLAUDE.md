@@ -55,6 +55,8 @@ No build step, no package manager, no server code.
 | `assets/theme.css` | The whole design system. Tokens in `:root`; everything else is a component class. |
 | `assets/config.js` | **Data, not logic.** Types, purposes, platforms, sites, `CURATED`, palettes, `AUTH_CONFIG`. |
 | `assets/app.js` | All behaviour, one IIFE, numbered sections. |
+| `assets/stage.js` | WebGL mortarboard. **ES module** — talks to app.js via `window.CBHub` + the `cb:data` event, never an import. |
+| `assets/vendor/` | three.js r169, vendored on purpose. Don't swap it for a CDN tag. |
 
 **Two orthogonal dimensions — don't merge them:**
 - **TYPE** (`plugin` / `snippet` / `theme` / `app` / `site`) → the colour in every chart and on
@@ -69,6 +71,14 @@ To file a project: add a `cat-<id>` topic on GitHub *or* a `CURATED` line. Prefe
 - **No Tailwind.** Don't reintroduce it. The CSS is hand-written against tokens.
 - **`[hidden] { display: none !important; }` is load-bearing** — `.btn` is `inline-flex`, which
   otherwise beats the `hidden` attribute and leaves the signed-out button visible while signed in.
+- **The stage is optional, always.** `mountStage()` returns null with no WebGL and the page must
+  be completely unaffected. Never move data or controls into `stage.js` that exist only there.
+- **Stone heights use a power curve (`^0.34`), not a log.** A log compresses 12 KB and 4 MB to
+  nearly the same height and the 65-snippet district renders as one flat blue slab — the very
+  thing this rebuild exists to fix.
+- **`_frame()` measures, it doesn't calculate.** Three analytic attempts were all wrong (the tilt
+  foreshortens depth but not width; the spinning cap sweeps a circle, not its bounding square;
+  the tassel hangs below everything). It projects the extremes and scales to fit — leave it that way.
 - **Nothing that matters may depend on an animation.** `.reveal` hiding is scoped to `.js`, set
   inline before first paint; a backgrounded tab skips the choreography entirely (IntersectionObserver
   reports nothing and timers are throttled when a tab is hidden). Screenshots of a hidden tab show a
