@@ -1633,8 +1633,8 @@ function publishData() {
   window.CBData = { repos: STATE.repos, types: TYPES };
   document.dispatchEvent(new CustomEvent('cb:data'));
   /* language enrichment changes stone heights — re-lay when it lands */
-  if (window.CBCity && window.CBCity.setRepos) {
-    window.CBCity.setRepos(STATE.repos, TYPES);
+  if (window.CBCity && window.CBCity.setEstate) {
+    window.CBCity.setEstate(STATE.repos, TYPES);
     fetchTrees();
   }
   renderHudFigures();
@@ -1653,6 +1653,8 @@ window.CBHub = {
   showTip: showTip, moveTip: moveTip, hideTip: hideTip,
   inspect: renderInspector,
   focus: function (n) { if (window.CBCity) window.CBCity.focus(n); },
+  openFile: openFileSource,
+  onLevel: renderCrumbs,
   worldReady: function () { WORLD_OK = true; renderHudLegend(); renderHudFigures(); },
   noWorld: function () {
     WORLD_OK = false;
@@ -1723,7 +1725,7 @@ function fetchTrees() {
 /* ============================================================
    15c. World mode — HUD, legend, inspector
    ============================================================ */
-var MODE = 'world', WORLD_OK = false;
+var MODE = 'world', WORLD_OK = false, CITY_LEVEL = { kind: 'estate' };
 
 function setMode(mode) {
   MODE = mode;
@@ -1774,6 +1776,85 @@ function renderHudLegend() {
   });
 }
 
+function renderCrumbs(crumbs, level, summary) {
+  var host = $('#hud-crumbs');
+  if (!host) return;
+  CITY_LEVEL = level;
+  if (!crumbs || crumbs.length < 2) { host.innerHTML = ''; host.hidden = true; }
+  else {
+    host.hidden = false;
+    host.innerHTML = crumbs.map(function (c, i) {
+      var last = i === crumbs.length - 1;
+      return (i ? '<span class="crumb-sep">/</span>' : '') +
+        '<button type="button" class="crumb" data-i="' + i + '"' + (last ? ' aria-current="location"' : '') + '>' +
+        esc(c.label) + '</button>';
+    }).join('');
+    $$('.crumb', host).forEach(function (b) {
+      b.addEventListener('click', function () {
+        var c = crumbs[parseInt(b.getAttribute('data-i'), 10)];
+        if (c && window.CBCity) window.CBCity.go(c.level);
+      });
+    });
+  }
+  var hr = $('#hud-result');
+  if (hr && summary) hr.textContent = summary;
+  /* search and the type legend only mean anything across the whole estate */
+  var inside = level && level.kind !== 'estate';
+  $('#hud-legend').hidden = !!inside;
+  $('#world-search').disabled = !!inside;
+  $('#world-search').placeholder = inside
+    ? 'Search works across the estate — go up to use it'
+    : 'Search — watch the city light up\u2026';
+}
+
+/* The end of the dive: the file itself. */
+function openFileSource(repo, file) {
+  if (!repo || !file) return;
+  modalRepo = repo;
+  $('#modal-title').textContent = file.name;
+  $('#modal-sub').textContent = repo.name + ' \u00b7 ' + file.path + ' \u00b7 ' + fmtBytes(file.size);
+  $('#modal-tabs').innerHTML = '';
+  $('#modal-links').innerHTML =
+    '<a class="btn btn-ghost btn-sm" href="' + esc(repo.url) + '/blob/' + esc(repo.branch) + '/' +
+    esc(file.path) + '" target="_blank" rel="noopener noreferrer">View on GitHub' + svg(ICON.ext, 12) + '</a>';
+  $('#modal-body').innerHTML = docSkeleton();
+  openModal();
+
+  var ext = (file.name.split('.').pop() || '').toLowerCase();
+  var BINARY = ['png','jpg','jpeg','gif','webp','ico','woff','woff2','ttf','eot','otf','mp4','webm','zip','pdf','mo'];
+  if (BINARY.indexOf(ext) >= 0) {
+    $('#modal-body').innerHTML = '<div class="empty"><h3>Binary file</h3>' +
+      '<p>' + esc(file.name) + ' is ' + esc(fmtBytes(file.size)) + ' of binary data \u2014 open it on GitHub to view it.</p></div>';
+    return;
+  }
+  if ((file.size || 0) > 600000) {
+    $('#modal-body').innerHTML = '<div class="empty"><h3>Too large to show</h3>' +
+      '<p>This file is ' + esc(fmtBytes(file.size)) + '. Open it on GitHub instead.</p></div>';
+    return;
+  }
+
+  ghFetch('https://api.github.com/repos/' + ACCOUNT + '/' + repo.name + '/contents/' +
+      file.path.split('/').map(encodeURIComponent).join('/'),
+    { headers: { 'Accept': 'application/vnd.github.raw' } })
+    .then(function (r) { if (!r.ok) throw new Error('file ' + r.status); return r.text(); })
+    .then(function (text) {
+      if (!modalRepo || modalRepo.name !== repo.name) return;
+      var lines = text.split('\n');
+      var shown = lines.slice(0, 1200);
+      $('#modal-body').innerHTML =
+        '<div class="srcwrap"><pre class="srcnums">' +
+          shown.map(function (_, i) { return i + 1; }).join('\n') +
+        '</pre><pre class="srccode">' + esc(shown.join('\n')) + '</pre></div>' +
+        (lines.length > shown.length
+          ? '<p class="panel-note" style="margin-top:10px">Showing the first 1,200 of ' + lines.length + ' lines.</p>'
+          : '<p class="panel-note" style="margin-top:10px">' + lines.length + ' lines.</p>');
+    })
+    .catch(function () {
+      $('#modal-body').innerHTML = '<div class="empty"><h3>Couldn\u2019t load the file</h3>' +
+        '<p>' + (ghToken ? 'GitHub wouldn\u2019t return this file.' : 'This repository is private \u2014 sign in to read it.') + '</p></div>';
+    });
+}
+
 function renderInspector(repo, file) {
   var el = $('#inspector');
   if (!el) return;
@@ -1814,7 +1895,9 @@ function wireWorldHud() {
     b.addEventListener('click', function () { setMode(b.getAttribute('data-mode')); });
   });
   $('#world-reset').addEventListener('click', function () {
-    if (window.CBCity) window.CBCity.resetView();
+    if (!window.CBCity) return;
+    if (CITY_LEVEL && CITY_LEVEL.kind !== 'estate') window.CBCity.home();
+    else window.CBCity.resetView();
   });
 
   var ws = $('#world-search'), wc = $('#world-search-clear');
@@ -1831,10 +1914,14 @@ function wireWorldHud() {
   wc.addEventListener('click', function () { ws.value = ''; wc.hidden = true; run(); ws.focus(); });
 
   document.addEventListener('keydown', function (e) {
-    if (e.key === 'Escape' && MODE === 'world' && $('#modal').getAttribute('data-open') !== '1') {
+    if (e.key !== 'Escape' || MODE !== 'world') return;
+    if ($('#modal').getAttribute('data-open') === '1') return;
+    if (!$('#inspector').hidden) {
       renderInspector(null);
       if (window.CBCity) window.CBCity.clearSelection();
+      return;
     }
+    if (window.CBCity) window.CBCity.up();
   });
 }
 

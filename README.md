@@ -36,6 +36,13 @@ every repository is a tower.** ~2,400 of them, laid out from each repo's actual
 | tower | a file, height from its bytes |
 | lit windows | ignition — search, hover, selection |
 
+- **Click a district and the city is rebuilt from what's inside it.** The same grammar repeats at
+  every depth, so the dive is: *Estate → a repository → its folders → a folder's subfolders →
+  the file's actual source.* Breadcrumbs sit under the search; `esc` goes back up.
+  Inside a repo, towers are coloured by **file type** rather than repo type.
+- **Each level's plate is sized to its content.** The estate needs the full cap; a 25-file repo on
+  the same plate gives every file a huge footprint and no height, so it reads as flat slabs
+  instead of towers.
 - **Trees stream in and districts rise as they land**, so the city builds itself in waves.
 - **Search sends a shockwave out from the centre** and towers ignite as it passes them.
   `learndash` lights 44 districts white-hot and leaves the other 65 dark.

@@ -13,7 +13,7 @@
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
 <link rel="preconnect" href="https://api.github.com" crossorigin />
 <link href="https://fonts.googleapis.com/css2?family=Montserrat:wght@300;400;500;600;700;800&display=swap" rel="stylesheet" />
-<link rel="stylesheet" href="assets/theme.css?v=9acc6403" />
+<link rel="stylesheet" href="assets/theme.css?v=c89b2607" />
 <script>document.documentElement.className += " js";</script>
 </head>
 <body>
@@ -87,6 +87,7 @@
           <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" aria-hidden="true"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>
         </button>
       </label>
+      <nav class="hud-crumbs" id="hud-crumbs" aria-label="Where you are"></nav>
       <p class="hud-result" id="hud-result"></p>
     </div>
 
@@ -99,7 +100,7 @@
         <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M3 12a9 9 0 1 0 3-6.7"/><polyline points="3 3 3 9 9 9"/></svg>
         Reset view
       </button>
-      <p class="hud-help">drag to orbit · scroll to zoom · click a tower · double-click to open the repo</p>
+      <p class="hud-help">drag to orbit · scroll to zoom · click to go deeper · esc to go up</p>
     </div>
   </div>
 
@@ -414,14 +415,14 @@
 </div>
 
 <script src="assets/config.js?v=84643cce"></script>
-<script src="assets/app.js?v=67041b73"></script>
+<script src="assets/app.js?v=7cae0516"></script>
 <script type="importmap">
 { "imports": { "three": "./assets/vendor/three.module.min.js" } }
 </script>
 <script type="module">
   /* Progressive enhancement: no WebGL (or a module that throws) drops the
      page into List mode, which holds all the same data. */
-  import { mountCity } from './assets/city.js?v=f346af4c';
+  import { mountCity } from './assets/city.js?v=20d3bdc6';
 
   const host = document.getElementById('world-host');
   let city = null;
@@ -429,17 +430,18 @@
   function boot() {
     if (city || !window.CBData || !window.CBData.repos.length) return;
     city = mountCity(host, {
-      onPick(name) { window.CBHub.openRepo(name); },
       onSelect(repo, file) { window.CBHub.inspect(repo, file); },
-      onHover(repo, file, ev) {
+      onOpenFile(repo, file) { window.CBHub.openFile(repo, file); },
+      onLevel(crumbs, level, summary) { window.CBHub.onLevel(crumbs, level, summary); },
+      onHover(repo, file, ev, levelKind) {
         if (!repo || !ev) { window.CBHub.hideTip(); return; }
-        window.CBHub.showTip(ev, window.CBHub.tipFor(repo, file));
+        window.CBHub.showTip(ev, window.CBHub.tipFor(repo, levelKind === 'estate' ? null : file));
         window.CBHub.moveTip(ev);
       }
     });
     if (!city) { window.CBHub.noWorld(); return; }
     window.CBCity = city;
-    city.setRepos(window.CBData.repos, window.CBData.types);
+    city.setEstate(window.CBData.repos, window.CBData.types);
     window.CBHub.worldReady();
   }
 

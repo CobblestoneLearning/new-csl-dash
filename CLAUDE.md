@@ -87,6 +87,12 @@ To file a project: add a `cat-<id>` topic on GitHub *or* a `CURATED` line. Prefe
 - **Search lifts, it doesn't hide.** Non-matches sink and grey; they stay on the board so you keep
   the sense of scale. Light columns are short, faint and alpha-ramped — additive columns at full
   height stacked to pure white wherever several overlapped and wiped out the scene.
+- **`_setPlate()` per level is load-bearing.** Laying 25 files onto the estate-sized cap gives
+  each one an enormous footprint against a fixed max height — flat slabs, not towers.
+- **`_fitDistance()` must include MAX_H**, not just the plate: on a small level the skyline is
+  most of the bounding sphere and a plate-only fit puts the camera inside the buildings.
+- **Roof test uses the OBJECT normal (`vObjN`), not `vNormal`.** `vNormal` is view-space, so
+  "is this face pointing up" became camera-dependent and roofs sprouted windows.
 - **Labels are ranked by district area and gated by distance.** All 109 at once is confetti, not
   navigation — the city carries the shape, labels only name what you could actually read.
 - **Stone heights use a power curve (`^0.34`), not a log.** A log compresses 12 KB and 4 MB to

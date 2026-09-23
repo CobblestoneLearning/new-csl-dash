@@ -1234,3 +1234,52 @@ body[data-mode="world"] .kbd-hint {
 body[data-mode="world"] kbd { background: rgba(255,255,255,.08); border-color: rgba(120,160,195,.22); color: #9fb3c6; }
 body[data-mode="world"] .auth-login { color: #e6eef6; }
 body[data-mode="world"] .topglow { opacity: 1; }
+
+/* ===================================================================
+   23. Descending into the city — breadcrumbs, folder labels, source
+   =================================================================== */
+.hud-crumbs {
+  display: flex; align-items: center; flex-wrap: wrap; gap: 2px;
+  margin: 10px 2px 0; max-width: 100%;
+}
+.hud-crumbs[hidden] { display: none; }
+.crumb {
+  font-size: 11.5px; font-weight: 700; color: #9fb3c6;
+  padding: 3px 8px; border-radius: var(--r-pill);
+  max-width: 190px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+  transition: background .14s var(--ease), color .14s var(--ease);
+}
+.crumb:hover { background: rgba(255,255,255,.09); color: #fff; }
+.crumb[aria-current="location"] { color: var(--cyan); }
+.crumb-sep { color: #566a7d; font-size: 11px; font-weight: 600; }
+
+/* folder districts read as openable, file districts don't */
+.cl-sub {
+  font-size: 9.5px; font-weight: 700; color: #7f95aa; letter-spacing: .04em;
+  padding-left: 6px; margin-left: 2px; border-left: 1px solid rgba(120,160,195,.26);
+}
+.city-label.is-leaf { border-style: dashed; }
+.city-label.is-leaf .cl-name { font-weight: 600; }
+
+/* disabled search while you're inside a repo */
+.hud-search input:disabled { opacity: .55; cursor: not-allowed; }
+.hud-tr[hidden] { display: none; }
+
+/* ---- source viewer ---- */
+.srcwrap {
+  display: flex; gap: 0; background: var(--canvas); border: 1px solid var(--line);
+  border-radius: var(--r); overflow: auto; max-height: 62vh;
+}
+.srcnums, .srccode {
+  margin: 0; padding: 14px 0; font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+  font-size: 12px; line-height: 1.55; white-space: pre;
+}
+.srcnums {
+  padding-inline: 12px; text-align: right; color: var(--faint);
+  background: var(--canvas-deep); border-right: 1px solid var(--line);
+  user-select: none; flex: none;
+}
+.srccode { padding-inline: 14px; color: var(--ink); flex: 1 1 auto; }
+
+/* the file viewer has no tabs, so the empty pill must not render */
+.segmented:empty { display: none; }
