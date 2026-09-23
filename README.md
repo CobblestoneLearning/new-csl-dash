@@ -33,8 +33,26 @@ every repository is a tower.** ~2,400 of them, laid out from each repo's actual
 |---|---|
 | district | a repository (treemap over the cap) |
 | block | a folder — recursive, to any depth; the padding at each level is what leaves streets |
-| tower | a file, height from its bytes |
+| building | a file — **its form is its type**, its height its bytes |
+| plate | a tinted ground slab under each district, so boundaries read before any label |
 | lit windows | ignition — search, hover, selection |
+
+**The architecture is computed, not decorated.** A city of identical scaled boxes tells you one
+thing: size. So every file type gets its own archetype, and a repository's silhouette becomes
+the shape of what it's made of — a theme (CSS slabs, pitched HTML) is legible at a glance
+against an app (glass JS towers) or a snippet (one lone PHP setback tower):
+
+| | | | |
+|---|---|---|---|
+| PHP → setback tower | JavaScript → tapered glass | CSS → slab with parapet | HTML → pitched roof |
+| Data → silo | Docs → stele | Images → domed pavilion | Fonts → spire |
+| Scripts → industrial stack | Media → drum | | |
+
+Across the estate that's 2,427 buildings in ten forms — 1,422 PHP setbacks, 392 CSS slabs,
+210 doc steles, 189 glass towers, and so on. The on-screen key is the legend for the skyline.
+All ten are authored to one contract (footprint inside ±0.5, base at y=0, apex at y=1) so a
+single instance matrix places any of them, and they're batched **by archetype rather than by
+district** — ten draw calls for the whole city instead of a hundred and nine.
 
 - **Click a district and the city is rebuilt from what's inside it.** The same grammar repeats at
   every depth, so the dive is: *Estate → a repository → its folders → a folder's subfolders →
@@ -52,8 +70,10 @@ every repository is a tower.** ~2,400 of them, laid out from each repo's actual
   confetti, not navigation.
 - Orbit / pan / zoom down to street level, among the towers.
 
-It is night here on purpose: the windows *are* the data, and bloom needs headroom a white page
-doesn't have.
+It's daylight: colour and form are the information, and you can't read either in the dark.
+Image-based lighting does the heavy lifting — it's what stops the forms reading as flat toy
+shapes. Glazing shows as darker panels in each facade; bloom is held right back so the only
+thing that truly emits is a search ignition.
 
 ### List — everything, flat
 

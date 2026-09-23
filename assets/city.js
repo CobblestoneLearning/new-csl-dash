@@ -25,37 +25,17 @@
 import * as THREE from 'three';
 import { OrbitControls } from './vendor/addons/OrbitControls.js';
 import { CSS2DRenderer, CSS2DObject } from './vendor/addons/CSS2DRenderer.js';
+import { RoomEnvironment } from './vendor/addons/RoomEnvironment.js';
 import { EffectComposer } from './vendor/addons/postprocessing/EffectComposer.js';
 import { RenderPass } from './vendor/addons/postprocessing/RenderPass.js';
 import { UnrealBloomPass } from './vendor/addons/postprocessing/UnrealBloomPass.js';
 import { OutputPass } from './vendor/addons/postprocessing/OutputPass.js';
+import { archetypeGeometry, archetypeFor, fileColor, extOf } from './architecture.js';
 
 const REDUCED = window.matchMedia('(prefers-reduced-motion: reduce)');
 const CAP = 260;
 const MAX_H = 46;
 const easeInOut = (t) => (t < 0.5 ? 4 * t * t * t : 1 - Math.pow(-2 * t + 2, 3) / 2);
-
-/* File colours, from the same validated categorical theme as the charts. */
-const EXT_COLOR = {
-  php: '#0072B2', inc: '#0072B2',
-  js: '#00916A', mjs: '#00916A', jsx: '#00916A', ts: '#00916A', tsx: '#00916A',
-  css: '#C4719B', scss: '#C4719B', sass: '#C4719B', less: '#C4719B',
-  html: '#D48200', htm: '#D48200', twig: '#D48200',
-  json: '#5BB8EC', xml: '#5BB8EC', yml: '#5BB8EC', yaml: '#5BB8EC', csv: '#5BB8EC',
-  md: '#8FA3B8', txt: '#8FA3B8', po: '#8FA3B8', pot: '#8FA3B8', mo: '#8FA3B8',
-  png: '#7E6BB5', jpg: '#7E6BB5', jpeg: '#7E6BB5', gif: '#7E6BB5', svg: '#7E6BB5',
-  webp: '#7E6BB5', ico: '#7E6BB5',
-  woff: '#4E6070', woff2: '#4E6070', ttf: '#4E6070', eot: '#4E6070', otf: '#4E6070',
-  mp4: '#B5686B', webm: '#B5686B', vtt: '#B5686B', srt: '#B5686B',
-  sh: '#6F8A5B', py: '#6F8A5B', sql: '#6F8A5B'
-};
-const EXT_FALLBACK = '#59697A';
-function extOf(path) {
-  const b = path.slice(path.lastIndexOf('/') + 1);
-  const i = b.lastIndexOf('.');
-  return i > 0 ? b.slice(i + 1).toLowerCase() : '';
-}
-function fileColor(path) { return EXT_COLOR[extOf(path)] || EXT_FALLBACK; }
 
 /* ---------- squarified treemap ---------- */
 function squarify(items, x, y, w, h, out) {
@@ -143,7 +123,7 @@ function layoutTree(node, x, y, w, h, depth, out) {
    a single shader compile) serves every district at every level.
    ------------------------------------------------------------------ */
 function towerMaterial() {
-  const mat = new THREE.MeshStandardMaterial({ color: 0x2b3745, roughness: 0.7, metalness: 0.16 });
+  const mat = new THREE.MeshStandardMaterial({ color: 0xffffff, roughness: 0.62, metalness: 0.06 });
   mat.onBeforeCompile = (shader) => {
     shader.uniforms.uGlow = { value: new THREE.Color(0x27aae1) };
     shader.vertexShader = shader.vertexShader
@@ -173,10 +153,11 @@ function towerMaterial() {
         float win = step(0.30, band) * step(band, 0.72)
                   * step(0.28, cols) * step(cols, 0.70);
         win *= 1.0 - step(0.5, abs(vObjN.y));   // object-space: roofs have no windows
-        float base = step(0.52, fract(vSeed * 41.7 + floor(vLocal.y * rows)));
-        float amount = base * 0.95 + vLit * 1.9;
-        totalEmissiveRadiance += glowCol * win * amount;
-        diffuseColor.rgb *= mix(0.45, 1.15, clamp(vLocal.y, 0.0, 1.0));`);
+        // daylight: glazing reads as darker, cooler panels in the facade,
+        // and only ignition actually emits
+        diffuseColor.rgb = mix(diffuseColor.rgb, diffuseColor.rgb * 0.42 + vec3(0.04, 0.07, 0.10), win * 0.85);
+        totalEmissiveRadiance += glowCol * win * vLit * 2.4;
+        diffuseColor.rgb *= mix(0.86, 1.10, clamp(vLocal.y, 0.0, 1.0));`);
     mat.userData.shader = shader;
   };
   return mat;
@@ -194,6 +175,8 @@ export class City {
     this.trees = new Map();        /* repo -> raw file list  */
     this.roots = new Map();        /* repo -> directory tree */
     this.districts = [];
+    this.batches = new Map();
+    this._plateQueue = [];
     this.repos = [];
     this.level = { kind: 'estate' };
     this.filter = null;
@@ -218,8 +201,8 @@ export class City {
     r.shadowMap.enabled = true;
     r.shadowMap.type = THREE.PCFSoftShadowMap;
     r.toneMapping = THREE.ACESFilmicToneMapping;
-    r.toneMappingExposure = 1.15;
-    r.setClearColor(0x0b1016, 1);
+    r.toneMappingExposure = 1.02;
+    r.setClearColor(0xdfe7ef, 1);
     r.domElement.className = 'city-gl';
     this.host.appendChild(r.domElement);
     this.renderer = r;
@@ -230,7 +213,15 @@ export class City {
     this.labelRenderer = l;
 
     this.scene = new THREE.Scene();
-    this.scene.fog = new THREE.FogExp2(0x0b1016, 0.0022);
+    this.scene.fog = new THREE.Fog(0xe3eaf1, CAP * 2.2, CAP * 6.0);
+    this.scene.background = this._sky();
+
+    /* Image-based lighting: this is what stops the forms reading as flat
+       toy shapes once they stop being plain boxes. */
+    const pmrem = new THREE.PMREMGenerator(r);
+    this.scene.environment = pmrem.fromScene(new RoomEnvironment(), 0.04).texture;
+    this.scene.environmentIntensity = 0.75;
+    pmrem.dispose();
 
     this.camera = new THREE.PerspectiveCamera(46, 1, 0.6, 4000);
     this.camera.position.set(0, CAP * 0.62, CAP * 0.72);
@@ -247,8 +238,8 @@ export class City {
     c.addEventListener('start', () => { this.userMoved = true; this.flight = null; });
     this.controls = c;
 
-    const key = new THREE.DirectionalLight(0xa8ccec, 1.75);
-    key.position.set(-CAP * 0.5, CAP * 0.9, CAP * 0.45);
+    const key = new THREE.DirectionalLight(0xfff4e2, 2.5);
+    key.position.set(-CAP * 0.55, CAP * 0.95, CAP * 0.5);
     key.castShadow = true;
     key.shadow.mapSize.set(2048, 2048);
     key.shadow.camera.near = 20; key.shadow.camera.far = CAP * 3;
@@ -257,9 +248,9 @@ export class City {
     key.shadow.camera.top = s; key.shadow.camera.bottom = -s;
     key.shadow.bias = -0.0012; key.shadow.normalBias = 0.5;
     this.scene.add(key);
-    this.scene.add(new THREE.HemisphereLight(0x39597a, 0x070b11, 1.15));
-    const rim = new THREE.DirectionalLight(0x27aae1, 0.55);
-    rim.position.set(CAP * 0.6, CAP * 0.2, -CAP * 0.6);
+    this.scene.add(new THREE.HemisphereLight(0xdcebff, 0xb9c4cf, 1.5));
+    const rim = new THREE.DirectionalLight(0x9fd4ef, 0.8);
+    rim.position.set(CAP * 0.6, CAP * 0.28, -CAP * 0.6);
     this.scene.add(rim);
 
     this.rig = new THREE.Group();
@@ -267,7 +258,7 @@ export class City {
 
     const deck = new THREE.Mesh(
       new THREE.BoxGeometry(CAP, 9, CAP),
-      new THREE.MeshStandardMaterial({ color: 0x141b24, roughness: 0.92, metalness: 0.1 })
+      new THREE.MeshStandardMaterial({ color: 0xf3f6f9, roughness: 0.95, metalness: 0 })
     );
     deck.position.y = -4.5; deck.receiveShadow = true;
     this.rig.add(deck);
@@ -276,8 +267,8 @@ export class City {
     this.skirt = new THREE.Mesh(
       new THREE.BoxGeometry(CAP * 1.035, 3.2, CAP * 1.035),
       new THREE.MeshStandardMaterial({
-        color: 0x27aae1, roughness: 0.4, metalness: 0.3,
-        emissive: 0x0d5f85, emissiveIntensity: 1.1
+        color: 0x27aae1, roughness: 0.45, metalness: 0.2,
+        emissive: 0x1176a3, emissiveIntensity: 0.35
       })
     );
     this.skirt.position.y = -9.6;
@@ -301,12 +292,28 @@ export class City {
     this._resize();
   }
 
+  _sky() {
+    const c = document.createElement('canvas');
+    c.width = 4; c.height = 256;
+    const g = c.getContext('2d');
+    const grad = g.createLinearGradient(0, 0, 0, 256);
+    grad.addColorStop(0.00, '#b9d4ea');
+    grad.addColorStop(0.45, '#dbe6f0');
+    grad.addColorStop(0.72, '#eef2f6');
+    grad.addColorStop(1.00, '#e3e9ee');
+    g.fillStyle = grad; g.fillRect(0, 0, 4, 256);
+    const t = new THREE.CanvasTexture(c);
+    t.colorSpace = THREE.SRGBColorSpace;
+    t.mapping = THREE.EquirectangularReflectionMapping;
+    return t;
+  }
+
   _initComposer() {
     const size = new THREE.Vector2();
     this.renderer.getSize(size);
     this.composer = new EffectComposer(this.renderer);
     this.composer.addPass(new RenderPass(this.scene, this.camera));
-    this.bloom = new UnrealBloomPass(size, 0.80, 0.70, 0.55);
+    this.bloom = new UnrealBloomPass(size, 0.42, 0.55, 0.88);
     this.composer.addPass(this.bloom);
     this.composer.addPass(new OutputPass());
   }
@@ -490,66 +497,151 @@ export class City {
     let maxSize = 1;
     spec.cells.forEach((c) => { maxSize = Math.max(maxSize, c.file.size || 0); });
 
-    const geo = new THREE.BoxGeometry(1, 1, 1);
-    geo.translate(0, 0.5, 0);
-    const mesh = new THREE.InstancedMesh(geo, this.towerMat, spec.cells.length);
-    mesh.castShadow = true; mesh.receiveShadow = true;
-    mesh.instanceMatrix.setUsage(THREE.DynamicDrawUsage);
-    mesh.frustumCulled = false;
-
-    const lit = new Float32Array(spec.cells.length);
-    const hs = new Float32Array(spec.cells.length);
-    const seeds = new Float32Array(spec.cells.length);
-    geo.setAttribute('aLit', new THREE.InstancedBufferAttribute(lit, 1));
-    geo.setAttribute('aH', new THREE.InstancedBufferAttribute(hs, 1));
-    geo.setAttribute('aSeed', new THREE.InstancedBufferAttribute(seeds, 1));
-
-    const col = new THREE.Color();
-    const towers = spec.cells.map((c, i) => {
-      const mag = Math.pow((c.file.size || 0) / maxSize, 0.38);
-      const h = 1.6 + mag * MAX_H;
-      hs[i] = h;
-      seeds[i] = (((i * 2654435761) >>> 0) % 1000) / 1000;
-      col.set(spec.colorBy === 'file' ? fileColor(c.file.path) : spec.color);
-      mesh.setColorAt(i, col);
-      return {
-        file: c.file, repo: spec.repo, i,
-        x: c.x + c.w / 2, z: c.y + c.h / 2,
-        w: Math.max(0.3, c.w - 0.26), d: Math.max(0.3, c.h - 0.26),
-        h, lit: 0, litTarget: 0, delay: 0
-      };
-    });
-    if (mesh.instanceColor) mesh.instanceColor.needsUpdate = true;
-
     const d = {
       key: spec.key, label: spec.label, sub: spec.sub, color: spec.color,
       x: spec.x, y: spec.y, w: spec.w, h: spec.h,
       target: spec.target, repo: spec.repo,
-      mesh, litAttr: geo.getAttribute('aLit'), towers,
-      t0: performance.now()
+      towers: [], t0: performance.now()
     };
-    this.rig.add(mesh);
+
+    /* Group this district's files by archetype: one InstancedMesh per form
+       for the whole level, not per district, so 2,400 buildings in ten
+       shapes cost ten draw calls rather than a hundred. */
+    const byArch = new Map();
+    spec.cells.forEach((c) => {
+      const arch = archetypeFor(c.file.path);
+      if (!byArch.has(arch)) byArch.set(arch, []);
+      byArch.get(arch).push(c);
+    });
+
+    byArch.forEach((cells, arch) => {
+      const batch = this._batch(arch, cells.length);
+      const col = new THREE.Color();
+      cells.forEach((c) => {
+        const i = batch.n++;
+        const mag = Math.pow((c.file.size || 0) / maxSize, 0.38);
+        const h = 1.6 + mag * MAX_H;
+        batch.hs[i] = h;
+        batch.seeds[i] = (((i * 2654435761) >>> 0) % 1000) / 1000;
+        col.set(fileColor(c.file.path));
+        batch.mesh.setColorAt(i, col);
+        const t = {
+          file: c.file, repo: spec.repo, district: d, batch, i,
+          x: c.x + c.w / 2, z: c.y + c.h / 2,
+          w: Math.max(0.3, c.w - 0.26), dd: Math.max(0.3, c.h - 0.26),
+          h, lit: 0, litTarget: 0, delay: 0,
+          order: d.towers.length / Math.max(1, spec.cells.length)
+        };
+        batch.towers[i] = t;
+        d.towers.push(t);
+      });
+      batch.dirty = true;
+    });
+
     this.districts.push(d);
-    this._writeDistrict(d, 0);
     this._addLabel(d);
     this._rankLabels();
+    this._plateQueue.push(d);
   }
 
-  _writeDistrict(d, intro) {
+  /* A lazily grown InstancedMesh per archetype for the current level. */
+  _batch(arch, want) {
+    let b = this.batches.get(arch);
+    const need = (b ? b.mesh.count : 0) + want;
+    if (!b || b.mesh.count < need) {
+      const cap = Math.max(need, 64);
+      const geo = archetypeGeometry(arch).clone();
+      const mesh = new THREE.InstancedMesh(geo, this.towerMat, cap);
+      mesh.castShadow = true; mesh.receiveShadow = true;
+      mesh.instanceMatrix.setUsage(THREE.DynamicDrawUsage);
+      mesh.frustumCulled = false;
+      const lit = new Float32Array(cap);
+      const hs = new Float32Array(cap);
+      const seeds = new Float32Array(cap);
+      geo.setAttribute('aLit', new THREE.InstancedBufferAttribute(lit, 1));
+      geo.setAttribute('aH', new THREE.InstancedBufferAttribute(hs, 1));
+      geo.setAttribute('aSeed', new THREE.InstancedBufferAttribute(seeds, 1));
+      const next = { arch, mesh, lit, hs, seeds, towers: [], n: 0,
+                     litAttr: geo.getAttribute('aLit'), dirty: true };
+      if (b) {                                    /* grow: carry the old one over */
+        for (let i = 0; i < b.n; i++) {
+          next.hs[i] = b.hs[i]; next.seeds[i] = b.seeds[i]; next.lit[i] = b.lit[i];
+          next.towers[i] = b.towers[i];
+          if (b.towers[i]) b.towers[i].batch = next;
+          const c = new THREE.Color();
+          if (b.mesh.instanceColor) { b.mesh.getColorAt(i, c); mesh.setColorAt(i, c); }
+        }
+        next.n = b.n;
+        this.rig.remove(b.mesh); b.mesh.geometry.dispose(); b.mesh.dispose();
+      }
+      this.rig.add(mesh);
+      this.batches.set(arch, next);
+      b = next;
+    }
+    return b;
+  }
+
+  /* Thin coloured plate under each district — what makes the boundaries
+     readable before any label has faded in. */
+  _flushPlates() {
+    if (!this._plateQueue.length) return;
+    const list = this.districts;
+    if (this.plates) { this.rig.remove(this.plates); this.plates.geometry.dispose(); this.plates.dispose(); }
+    const geo = new THREE.BoxGeometry(1, 1, 1);
+    geo.translate(0, 0.5, 0);
+    this.plates = new THREE.InstancedMesh(
+      geo,
+      new THREE.MeshStandardMaterial({ roughness: 0.94, metalness: 0 }),
+      list.length
+    );
+    this.plates.receiveShadow = true;
+    this.plates.frustumCulled = false;
+    const m = new THREE.Matrix4(), q = new THREE.Quaternion();
+    const pos = new THREE.Vector3(), scl = new THREE.Vector3();
+    const col = new THREE.Color();
+    list.forEach((d, i) => {
+      pos.set(d.x + d.w / 2, -0.55, d.y + d.h / 2);
+      scl.set(Math.max(0.5, d.w - 0.6), 0.55, Math.max(0.5, d.h - 0.6));
+      m.compose(pos, q, scl);
+      this.plates.setMatrixAt(i, m);
+      col.set(d.color).lerp(new THREE.Color(0xffffff), 0.62);
+      this.plates.setColorAt(i, col);
+    });
+    this.plates.instanceMatrix.needsUpdate = true;
+    if (this.plates.instanceColor) this.plates.instanceColor.needsUpdate = true;
+    this.rig.add(this.plates);
+    this._plateQueue.length = 0;
+  }
+
+  /* One pass over every batch. Each tower carries its district, so the
+     staggered rise still happens per district while the write stays a
+     single sweep per archetype. */
+  _writeBatches(now) {
     const m = new THREE.Matrix4();
     const q = new THREE.Quaternion();
     const p = new THREE.Vector3();
-    const s = new THREE.Vector3();
-    for (let i = 0; i < d.towers.length; i++) {
-      const t = d.towers[i];
-      const stagger = Math.max(0, Math.min(1, intro * 1.8 - (i / d.towers.length) * 0.5));
-      const e = 1 - Math.pow(1 - stagger, 4);
-      p.set(t.x, 0, t.z);
-      s.set(t.w, Math.max(0.05, t.h * e), t.d);
-      m.compose(p, q, s);
-      d.mesh.setMatrixAt(i, m);
-    }
-    d.mesh.instanceMatrix.needsUpdate = true;
+    const sc = new THREE.Vector3();
+    this.batches.forEach((b) => {
+      if (!b.dirty && !b.animating) return;
+      let animating = false;
+      for (let i = 0; i < b.n; i++) {
+        const t = b.towers[i];
+        if (!t) continue;
+        const intro = Math.min(1, (now - t.district.t0) / 1300);
+        if (intro < 1) animating = true;
+        const stagger = Math.max(0, Math.min(1, intro * 1.8 - t.order * 0.5));
+        const e = 1 - Math.pow(1 - stagger, 4);
+        p.set(t.x, 0, t.z);
+        sc.set(t.w, Math.max(0.05, t.h * e), t.dd);
+        m.compose(p, q, sc);
+        b.mesh.setMatrixAt(i, m);
+      }
+      b.mesh.count = b.n;
+      b.mesh.instanceMatrix.needsUpdate = true;
+      if (b.mesh.instanceColor) b.mesh.instanceColor.needsUpdate = true;
+      b.dirty = false;
+      b.animating = animating;
+    });
   }
 
   _addLabel(d) {
@@ -718,13 +810,15 @@ export class City {
 
   _pick() {
     this.raycaster.setFromCamera(this.pointer, this.camera);
-    const meshes = this.districts.map((d) => d.mesh);
+    const meshes = [];
+    this.batches.forEach((b) => meshes.push(b.mesh));
     const hit = this.raycaster.intersectObjects(meshes, false)[0];
     if (!hit) { this._setHover(null); return; }
-    const d = this.districts.find((x) => x.mesh === hit.object);
-    const t = d && d.towers[hit.instanceId];
+    let batch = null;
+    this.batches.forEach((b) => { if (b.mesh === hit.object) batch = b; });
+    const t = batch && batch.towers[hit.instanceId];
     if (!t) { this._setHover(null); return; }
-    this._setHover({ district: d, repo: t.repo, file: t.file, tower: t });
+    this._setHover({ district: t.district, repo: t.repo, file: t.file, tower: t });
   }
 
   /* ================= loop ================= */
@@ -769,20 +863,21 @@ export class City {
     }
     const waveR = this.wave ? this.wave.r : 99;
 
-    this.districts.forEach((d) => {
-      const intro = Math.min(1, (now - d.t0) / 1300);
-      if (intro < 1) this._writeDistrict(d, intro);
-      const arr = d.litAttr.array;
+    this._flushPlates();
+    this._writeBatches(now);
+
+    this.batches.forEach((b) => {
       let dirty = false;
-      for (let i = 0; i < d.towers.length; i++) {
-        const t = d.towers[i];
+      for (let i = 0; i < b.n; i++) {
+        const t = b.towers[i];
+        if (!t) continue;
         const gate = this.wave ? (waveR >= (t.delay || 0) ? 1 : 0) : 1;
         const target = t.litTarget * gate;
         const next = t.lit + (target - t.lit) * 0.12;
         if (Math.abs(next - t.lit) > 0.0005) { t.lit = next; dirty = true; }
-        arr[i] = t.lit;
+        b.lit[i] = t.lit;
       }
-      if (dirty || intro < 1) d.litAttr.needsUpdate = true;
+      if (dirty) b.litAttr.needsUpdate = true;
     });
 
     if (this.hasPointer && !this.flight) this._pick();
@@ -805,11 +900,15 @@ export class City {
   }
 
   _clearDistricts() {
-    this.districts.forEach((d) => {
-      this.rig.remove(d.mesh);
-      d.mesh.geometry.dispose();
-      d.mesh.dispose();
+    this.batches.forEach((b) => {
+      this.rig.remove(b.mesh); b.mesh.geometry.dispose(); b.mesh.dispose();
     });
+    this.batches.clear();
+    this._plateQueue = [];
+    if (this.plates) {
+      this.rig.remove(this.plates); this.plates.geometry.dispose();
+      this.plates.material.dispose(); this.plates.dispose(); this.plates = null;
+    }
     this.labels.forEach((o) => { this.rig.remove(o); if (o.element.parentNode) o.element.remove(); });
     this.districts = []; this.labels = [];
     this.hover = null; this.wave = null;

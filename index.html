@@ -13,7 +13,7 @@
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
 <link rel="preconnect" href="https://api.github.com" crossorigin />
 <link href="https://fonts.googleapis.com/css2?family=Montserrat:wght@300;400;500;600;700;800&display=swap" rel="stylesheet" />
-<link rel="stylesheet" href="assets/theme.css?v=c89b2607" />
+<link rel="stylesheet" href="assets/theme.css?v=89fad862" />
 <script>document.documentElement.className += " js";</script>
 </head>
 <body>
@@ -94,6 +94,8 @@
     <div class="hud-tr" id="hud-legend" role="group" aria-label="Filter by type"></div>
 
     <div class="hud-bl" id="hud-figures"></div>
+
+    <div class="hud-key" id="hud-key" aria-label="What the shapes mean"></div>
 
     <div class="hud-br">
       <button type="button" class="hud-btn" id="world-reset">
@@ -422,7 +424,8 @@
 <script type="module">
   /* Progressive enhancement: no WebGL (or a module that throws) drops the
      page into List mode, which holds all the same data. */
-  import { mountCity } from './assets/city.js?v=20d3bdc6';
+  import { mountCity } from './assets/city.js?v=7d7b8c51';
+  import { KEY, KEY_GLYPH } from './assets/architecture.js?v=49c2255e';
 
   const host = document.getElementById('world-host');
   let city = null;
@@ -441,8 +444,19 @@
     });
     if (!city) { window.CBHub.noWorld(); return; }
     window.CBCity = city;
+    renderKey();
     city.setEstate(window.CBData.repos, window.CBData.types);
     window.CBHub.worldReady();
+  }
+
+  /* The shape key — every file type is a different building, so the key is
+     the legend for the skyline. */
+  function renderKey() {
+    const host = document.getElementById('hud-key');
+    if (!host) return;
+    host.innerHTML = KEY.map((k) =>
+      '<span class="keyitem"><svg viewBox="0 0 24 24" aria-hidden="true" style="fill:' + k.color + '">' +
+      '<path d="' + KEY_GLYPH[k.arch] + '"/></svg>' + k.label + '</span>').join('');
   }
 
   document.addEventListener('cb:data', boot);

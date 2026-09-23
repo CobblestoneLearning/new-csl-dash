@@ -55,6 +55,7 @@ No build step, no package manager, no server code.
 | `assets/theme.css` | The whole design system. Tokens in `:root`; everything else is a component class. |
 | `assets/config.js` | **Data, not logic.** Types, purposes, platforms, sites, `CURATED`, palettes, `AUTH_CONFIG`. |
 | `assets/app.js` | All behaviour, one IIFE, numbered sections. |
+| `assets/architecture.js` | The building vocabulary: archetype geometry, file→form/colour maps, the on-screen key. |
 | `assets/city.js` | The Estate: a city built from the real file trees. **ES module** — talks to app.js via `window.CBHub` + the `cb:data` event, never an import. |
 | `assets/vendor/` | three.js r169 + OrbitControls, CSS2DRenderer, and the postprocessing chain. Vendored on purpose — keep the upstream `postprocessing/` + `shaders/` folders, the addons import each other by relative path. |
 
@@ -76,6 +77,15 @@ To file a project: add a `cat-<id>` topic on GitHub *or* a `CURATED` line. Prefe
 - **No Tailwind.** Don't reintroduce it. The CSS is hand-written against tokens.
 - **`[hidden] { display: none !important; }` is load-bearing** — `.btn` is `inline-flex`, which
   otherwise beats the `hidden` attribute and leaves the signed-out button visible while signed in.
+- **Archetypes are authored to one contract**: footprint inside ±0.5 on x/z, base at y=0, apex at
+  y=1, indexed with position/normal/uv. Break it and the instance matrix or `mergeGeometries`
+  will misbehave, and the window shader loses its notion of "up the building".
+- **Buildings batch by archetype, not by district.** `_batch()` grows a shared InstancedMesh per
+  form and towers carry `{district, batch, i}` back-references; picking maps (mesh, instanceId)
+  through `batch.towers`. Reverting to a mesh per district costs ~100 extra draw calls.
+- **The Estate is daylight.** It was night while the windows were the only signal; once form and
+  colour became the information, dark made it unreadable. Don't reintroduce the night overrides
+  in theme.css — they were removed deliberately.
 - **The city is optional, always.** `mountCity()` returns null with no WebGL, and List mode must
   still be complete. Never let a control or a piece of data live only inside `city.js`.
 - **The city is made of `git/trees`, one call per repo**, cached in `sessionStorage` against
