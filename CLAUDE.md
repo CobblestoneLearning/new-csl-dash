@@ -93,6 +93,15 @@ To file a project: add a `cat-<id>` topic on GitHub *or* a `CURATED` line. Prefe
   its treemap cell and districts start overlapping.
 - **Links are built after the trees land, not when the estate is declared** — districts don't
   exist until their tree arrives, so building arcs early silently produces zero curves.
+- **Buildings are composed, not scaled.** `variantFor()` picks family/tier/crown; `buildVariant()`
+  assembles and then **normalises into the contract** (footprint ±0.5, base 0, apex 1). Anything
+  new must go through that normalisation or the instance matrix will misplace it.
+- **Batch by variant key, not family.** 60 geometries instanced beats 2,427 unique meshes.
+- **Dependency edges are parsed, never inferred.** An import that doesn't resolve to a real file
+  in the repo's tree is dropped. Don't "help" it with fuzzy filename matching — a graph that
+  looks right and isn't is worse than no graph.
+- **The PHP import pattern must tolerate `require_once CONST . 'path.php'`** — that's how the
+  real code is written. A naive `require\s*['"]` matches almost nothing in this estate.
 - **The city is optional, always.** `mountCity()` returns null with no WebGL, and List mode must
   still be complete. Never let a control or a piece of data live only inside `city.js`.
 - **The city is made of `git/trees`, one call per repo**, cached in `sessionStorage` against

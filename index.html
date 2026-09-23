@@ -13,7 +13,7 @@
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
 <link rel="preconnect" href="https://api.github.com" crossorigin />
 <link href="https://fonts.googleapis.com/css2?family=Montserrat:wght@300;400;500;600;700;800&display=swap" rel="stylesheet" />
-<link rel="stylesheet" href="assets/theme.css?v=1fb9c6ed" />
+<link rel="stylesheet" href="assets/theme.css?v=278a4dde" />
 <script>document.documentElement.className += " js";</script>
 </head>
 <body>
@@ -89,6 +89,7 @@
       </label>
       <nav class="hud-crumbs" id="hud-crumbs" aria-label="Where you are"></nav>
       <p class="hud-result" id="hud-result"></p>
+      <p class="trace-status" id="trace-status" hidden></p>
     </div>
 
     <div class="hud-tr" id="hud-legend" role="group" aria-label="Filter by type"></div>
@@ -421,15 +422,15 @@
 </div>
 
 <script src="assets/config.js?v=84643cce"></script>
-<script src="assets/app.js?v=72cf9cd6"></script>
+<script src="assets/app.js?v=c019b326"></script>
 <script type="importmap">
 { "imports": { "three": "./assets/vendor/three.module.min.js" } }
 </script>
 <script type="module">
   /* Progressive enhancement: no WebGL (or a module that throws) drops the
      page into List mode, which holds all the same data. */
-  import { mountCity } from './assets/city.js?v=3412f0b5';
-  import { KEY, KEY_GLYPH, describeSignature } from './assets/architecture.js?v=9403454e';
+  import { mountCity } from './assets/city.js?v=7ceabbce';
+  import { KEY, KEY_GLYPH, describeSignature } from './assets/architecture.js?v=b4649c48';
 
   const host = document.getElementById('world-host');
   let city = null;

@@ -37,42 +37,41 @@ every repository is a tower.** ~2,400 of them, laid out from each repo's actual
 | plate | a tinted ground slab under each district, so boundaries read before any label |
 | lit windows | ignition — search, hover, selection |
 
-**The architecture is computed, not decorated.** A city of identical scaled boxes tells you one
-thing: size. So every file type gets its own archetype, and a repository's silhouette becomes
-the shape of what it's made of — a theme (CSS slabs, pitched HTML) is legible at a glance
-against an app (glass JS towers) or a snippet (one lone PHP setback tower):
+**The architecture is computed, not decorated.** Buildings are *composed*, not scaled — assembled
+from real parts (plinths, colonnades, arcades, terraces, flying buttresses, domes, lanterns,
+pediments, statues) and which parts a building gets is derived:
 
-| | | | |
-|---|---|---|---|
-| PHP → setback tower | JavaScript → tapered glass | CSS → slab with parapet | HTML → pitched roof |
-| Data → silo | Docs → stele | Images → domed pavilion | Fonts → spire |
-| Scripts → industrial stack | Media → drum | | |
-
-**And every repository builds differently, from its own contents.** Archetypes vary the
-buildings; a *signature* varies the city. Real spread across the estate: average nesting depth
-runs 0.0 (a one-file snippet) to 6.7 (`stripe-payment`); size skew runs 0.3 (uniform) to 3.0
-(one file dwarfing the rest); type variety runs 3 to 6. Those become architecture:
-
-| signal | becomes |
+| | |
 |---|---|
-| nesting depth + size skew | `verticality` — how tall the district builds (0.55× → 2.6×) |
-| nesting depth | `slender` — deep trees build thin towers, flat ones squat blocks |
-| type variety + name hash | `twist` — how far the street grid rotates off true |
-| size skew | `crown` — how tall the landmark stands |
+| **family** | file type — `php` → monolith, `js` → tapered tower, `css` → hall, `html` → pitched house, data → silo, docs → stele, images → domed pavilion, fonts → spire, scripts → industrial works, media → drum |
+| **tier** | size percentile *within its own repo* — plain → colonnade → + arcade of arches → + flying buttresses |
+| **crown** | name and type — flat, pediment, dome, lantern, spire, **statue** |
+| **landmark** | the biggest file in each district is always fully ornate and always crowned |
 
-So `stripe-payment` (deeply nested, broad mix) grows a dense vertical downtown at 2.31×
-verticality and 0.57 slenderness, while a one-file snippet sprawls low and regular at 0.63× and
-0.94. Nothing is hand-assigned, and the inspector states each repo's signature in words.
+So a single-file snippet becomes a statue on a colonnaded plinth; a 400 KB vendor class becomes a
+buttressed monolith under a lantern; a buried partial stays a plain shaft. Files named
+`index`/`main`/`readme`/`plugin`/`functions` get a statue whatever their size.
 
-A rotated building would overflow its treemap cell, so the footprint shrinks by exactly what the
-rotation costs — `1 / (|cos θ| + |sin θ|)`.
+Geometry is generated **per variant, not per building** — 60 distinct forms instanced across
+2,427 buildings, so the variety is free at draw time. Every variant is normalised into one
+contract (footprint ±0.5, base y=0, apex y=1) so a single instance matrix places any of them.
 
 ### Connections
 
-Repos carry platform topics, so each platform with three or more repos gets a **beacon above the
-city**, and every repo using it throws an arc up to it with light running along the arc. Pairwise
-links would be 900+ lines for LearnDash alone; hub-and-spoke says the same thing and stays
-readable — 191 arcs to 9 beacons. Toggleable, and estate-level only.
+**Across the estate:** each platform with three or more repos gets a **beacon above the city**,
+and every repo using it throws an arc up to it with light running along the arc. Pairwise links
+would be 900+ lines for LearnDash alone; hub-and-spoke says the same thing and stays readable —
+191 arcs to 9 beacons.
+
+**Inside a repo: the real wiring.** Entering a repo or folder reads the files on screen and pulls
+out what they actually pull in — PHP `require`/`include`, JS `import`/`require`, CSS `@import`,
+markup `src`/`href`, and the WordPress path helpers. Relative paths are resolved against the
+file's own directory and matched back against the repo's tree, so **an edge only exists if both
+ends are real files in this repository**; an unresolved import is dropped rather than drawn.
+`csl-entra-sync` traces 21 edges — its main plugin file arcing out to every class it requires.
+
+Bounded on purpose: only the files at the level you're looking at, capped at 55, six at a time,
+cached per repo+path. Both link layers share the Connections toggle.
 
 Across the estate that's 2,427 buildings in ten forms — 1,422 PHP setbacks, 392 CSS slabs,
 210 doc steles, 189 glass towers, and so on. The on-screen key is the legend for the skyline.

@@ -30,7 +30,7 @@ import { EffectComposer } from './vendor/addons/postprocessing/EffectComposer.js
 import { RenderPass } from './vendor/addons/postprocessing/RenderPass.js';
 import { UnrealBloomPass } from './vendor/addons/postprocessing/UnrealBloomPass.js';
 import { OutputPass } from './vendor/addons/postprocessing/OutputPass.js';
-import { archetypeGeometry, archetypeFor, fileColor, extOf, signatureOf } from './architecture.js';
+import { variantGeometry, variantFor, archetypeFor, fileColor, extOf, signatureOf } from './architecture.js';
 
 const REDUCED = window.matchMedia('(prefers-reduced-motion: reduce)');
 const CAP = 260;
@@ -495,6 +495,63 @@ export class City {
     });
   }
 
+  /* Arcs between two files in this repo, from what they actually import. */
+  setFileLinks(edges) {
+    if (this.fileLinks) {
+      this.rig.remove(this.fileLinks);
+      this.fileLinks.geometry.dispose(); this.fileLinks.material.dispose();
+      this.fileLinks = null;
+    }
+    if (this.fileDots) {
+      this.rig.remove(this.fileDots);
+      this.fileDots.geometry.dispose(); this.fileDots.material.dispose();
+      this.fileDots = null;
+    }
+    this.fileCurves = null;
+    if (!edges || !edges.length) return;
+
+    const byPath = new Map();
+    this.districts.forEach((d) => d.towers.forEach((t) => byPath.set(t.file.path, t)));
+
+    const verts = [], curves = [];
+    edges.forEach((e) => {
+      const a = byPath.get(e.from), b = byPath.get(e.to);
+      if (!a || !b || a === b) return;
+      const p0 = new THREE.Vector3(a.x, a.h + 2, a.z);
+      const p1 = new THREE.Vector3(b.x, b.h + 2, b.z);
+      const mid = p0.clone().lerp(p1, 0.5);
+      mid.y += Math.max(10, p0.distanceTo(p1) * 0.42);
+      const cv = new THREE.QuadraticBezierCurve3(p0, mid, p1);
+      const pts = cv.getPoints(16);
+      for (let k = 0; k < pts.length - 1; k++) {
+        verts.push(pts[k].x, pts[k].y, pts[k].z, pts[k + 1].x, pts[k + 1].y, pts[k + 1].z);
+      }
+      curves.push(cv);
+    });
+    if (!curves.length) return;
+
+    const g = new THREE.BufferGeometry();
+    g.setAttribute('position', new THREE.Float32BufferAttribute(verts, 3));
+    this.fileLinks = new THREE.LineSegments(g, new THREE.LineBasicMaterial({
+      color: 0x0074b4, transparent: true, opacity: 0.48, depthWrite: false
+    }));
+    this.fileLinks.frustumCulled = false;
+    this.rig.add(this.fileLinks);
+
+    const dg = new THREE.BufferGeometry();
+    dg.setAttribute('position', new THREE.Float32BufferAttribute(new Float32Array(curves.length * 3), 3));
+    this.fileDots = new THREE.Points(dg, new THREE.PointsMaterial({
+      color: 0x27aae1, size: 3.6, transparent: true, opacity: 1,
+      depthWrite: false, blending: THREE.AdditiveBlending, sizeAttenuation: true
+    }));
+    this.fileDots.frustumCulled = false;
+    this.rig.add(this.fileDots);
+
+    this.fileCurves = curves;
+    this.fileOffset = new Float32Array(curves.length);
+    for (let i = 0; i < curves.length; i++) this.fileOffset[i] = Math.random();
+  }
+
   setLinksVisible(on) {
     this.linksOn = on;
     if (this.links) this.links.visible = on;
@@ -503,16 +560,27 @@ export class City {
   }
 
   _clearLinks() {
-    [this.links, this.pulses].forEach((o) => {
+    [this.links, this.pulses, this.fileLinks, this.fileDots].forEach((o) => {
       if (!o) return;
       this.rig.remove(o); o.geometry.dispose(); o.material.dispose();
     });
     this.links = null; this.pulses = null; this.curves = null;
+    this.fileLinks = null; this.fileDots = null; this.fileCurves = null;
     this.hubLabels.forEach((o) => { this.rig.remove(o); if (o.element.parentNode) o.element.remove(); });
     this.hubLabels = [];
   }
 
   _stepPulses(now) {
+    if (this.fileDots && this.fileCurves) {
+      const fa = this.fileDots.geometry.getAttribute('position');
+      const ft = now * 0.00022;
+      const fv = new THREE.Vector3();
+      for (let i = 0; i < this.fileCurves.length; i++) {
+        this.fileCurves[i].getPoint((ft + this.fileOffset[i]) % 1, fv);
+        fa.setXYZ(i, fv.x, fv.y, fv.z);
+      }
+      fa.needsUpdate = true;
+    }
     if (!this.pulses || !this.curves || !this.linksOn) return;
     const arr = this.pulses.geometry.getAttribute('position');
     const t = now * 0.00016;
@@ -635,11 +703,17 @@ export class City {
     /* Group this district's files by archetype: one InstancedMesh per form
        for the whole level, not per district, so 2,400 buildings in ten
        shapes cost ten draw calls rather than a hundred. */
+    const ranked = spec.cells.slice().sort((a, b) => (a.file.size || 0) - (b.file.size || 0));
+    const pctOf = new Map();
+    ranked.forEach((c, i) => pctOf.set(c, ranked.length > 1 ? i / (ranked.length - 1) : 1));
+    const landmark = ranked[ranked.length - 1];
+
     const byArch = new Map();
     spec.cells.forEach((c) => {
-      const arch = archetypeFor(c.file.path);
-      if (!byArch.has(arch)) byArch.set(arch, []);
-      byArch.get(arch).push(c);
+      const depth = (c.file.path.match(/\//g) || []).length;
+      const key = variantFor(c.file.path, pctOf.get(c), c === landmark, sig, depth);
+      if (!byArch.has(key)) byArch.set(key, []);
+      byArch.get(key).push(c);
     });
 
     byArch.forEach((cells, arch) => {
@@ -688,7 +762,7 @@ export class City {
     const need = (b ? b.mesh.count : 0) + want;
     if (!b || b.mesh.count < need) {
       const cap = Math.max(need, 64);
-      const geo = archetypeGeometry(arch).clone();
+      const geo = variantGeometry(arch).clone();
       const mesh = new THREE.InstancedMesh(geo, this.towerMat, cap);
       mesh.castShadow = true; mesh.receiveShadow = true;
       mesh.instanceMatrix.setUsage(THREE.DynamicDrawUsage);

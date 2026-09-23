@@ -1727,6 +1727,125 @@ function fetchTrees() {
 }
 
 /* ============================================================
+   15b3. Dependency tracing — the real wiring inside a repo
+   ------------------------------------------------------------
+   Reads the files at the level you're looking at and pulls out what
+   they actually pull in: PHP require/include, JS import/require, CSS
+   @import, HTML src/href. Relative paths are resolved against the
+   file's own directory and matched back to the repo's tree, so an edge
+   only exists if both ends are real files in this repository.
+
+   Bounded on purpose: only the files on screen, capped, six at a time,
+   cached per repo+path. Nothing is guessed — an unresolved import is
+   dropped rather than drawn.
+   ============================================================ */
+var TEXTY = /\.(php|inc|phtml|js|mjs|jsx|ts|tsx|css|scss|less|html|htm|twig)$/i;
+var TRY_EXT = ['', '.php', '.js', '.jsx', '.ts', '.css', '.scss', '.html', '/index.php', '/index.js'];
+
+var IMPORT_PATTERNS = [
+  /* PHP. Real code is `require_once PLUGIN_DIR . 'includes/x.php';`, so allow
+     whatever constant/concatenation sits between the keyword and the path —
+     but insist on a file extension so we don't match prose. */
+  /(?:require|include)(?:_once)?\b[^;\n]{0,160}?['"]([^'"\n]+?\.(?:php|inc|phtml))['"]/gi,
+  /* ES modules and CommonJS */
+  /\bfrom\s+['"]([^'"\n]+)['"]/g,
+  /\brequire\s*\(\s*['"]([^'"\n]+)['"]\s*\)/g,
+  /* CSS */
+  /@import\s+(?:url\()?\s*['"]?([^'")\n]+)/g,
+  /* markup, and WordPress path helpers */
+  /(?:src|href)\s*=\s*["\']([^"\'\n]+)["\']/g,
+  /(?:plugin_dir_path|plugin_dir_url|get_template_directory(?:_uri)?|get_stylesheet_directory(?:_uri)?)\s*\([^)]*\)\s*\.\s*['"]([^'"\n]+)['"]/g
+];
+
+function resolveImport(fromPath, raw, pathSet) {
+  var spec = String(raw).split(/[?#]/)[0].trim();
+  if (!spec || /^(https?:|\/\/|data:|mailto:|#)/i.test(spec)) return null;
+  if (/node_modules|vendor\/bin/.test(spec)) return null;
+  spec = spec.replace(/^\.\//, '');
+  var dir = fromPath.indexOf('/') >= 0 ? fromPath.slice(0, fromPath.lastIndexOf('/')) : '';
+  var bases = [];
+  if (spec.charAt(0) === '/') bases.push(spec.slice(1));
+  else {
+    bases.push(dir ? dir + '/' + spec : spec);
+    bases.push(spec);
+  }
+  for (var b = 0; b < bases.length; b++) {
+    /* collapse ../ */
+    var parts = [], segs = bases[b].split('/');
+    for (var i = 0; i < segs.length; i++) {
+      if (segs[i] === '..') parts.pop();
+      else if (segs[i] && segs[i] !== '.') parts.push(segs[i]);
+    }
+    var joined = parts.join('/');
+    for (var e = 0; e < TRY_EXT.length; e++) {
+      var cand = joined + TRY_EXT[e];
+      if (pathSet[cand] && cand !== fromPath) return cand;
+    }
+  }
+  return null;
+}
+
+function traceDependencies(repo, paths, onDone) {
+  var pathSet = {};
+  (window.CBCity.trees.get(repo.name) || []).forEach(function (f) { pathSet[f.p] = 1; });
+  var targets = paths.filter(function (p) { return TEXTY.test(p); }).slice(0, 55);
+  if (!targets.length) { onDone([]); return; }
+
+  var edges = [], idx = 0, CONC = 6, done = 0;
+  setTraceStatus('reading ' + targets.length + ' files\u2026');
+
+  function scan(path, text) {
+    var seen = {};
+    IMPORT_PATTERNS.forEach(function (re) {
+      re.lastIndex = 0;
+      var m;
+      while ((m = re.exec(text)) !== null) {
+        var to = resolveImport(path, m[1], pathSet);
+        if (to && !seen[to]) { seen[to] = 1; edges.push({ from: path, to: to }); }
+      }
+    });
+  }
+
+  function one(path) {
+    var key = 'cb2_src_' + repo.name + '_' + path;
+    var cached = null;
+    try { cached = sessionStorage.getItem(key); } catch (e) {}
+    if (cached != null) { scan(path, cached); done++; return Promise.resolve(); }
+    return ghFetch('https://api.github.com/repos/' + ACCOUNT + '/' + repo.name + '/contents/' +
+        path.split('/').map(encodeURIComponent).join('/'),
+      { headers: { 'Accept': 'application/vnd.github.raw' } })
+      .then(function (r) { return r.ok ? r.text() : ''; })
+      .then(function (t) {
+        var keep = t.length > 120000 ? t.slice(0, 120000) : t;
+        try { sessionStorage.setItem(key, keep); } catch (e) {}
+        scan(path, keep); done++;
+      })
+      .catch(function () { done++; });
+  }
+
+  function pump() {
+    if (idx >= targets.length) {
+      setTraceStatus(edges.length ? edges.length + ' links traced' : 'no internal links found');
+      setTimeout(function () { setTraceStatus(''); }, 3200);
+      onDone(edges);
+      return;
+    }
+    var batch = targets.slice(idx, idx + CONC);
+    idx += CONC;
+    setTraceStatus('reading ' + Math.min(idx, targets.length) + ' of ' + targets.length + '\u2026');
+    Promise.all(batch.map(one)).then(pump);
+  }
+  pump();
+}
+
+function setTraceStatus(msg) {
+  var el = $('#trace-status');
+  if (!el) return;
+  el.textContent = msg || '';
+  el.hidden = !msg;
+}
+
+/* ============================================================
    15c. World mode — HUD, legend, inspector
    ============================================================ */
 var MODE = 'world', WORLD_OK = false, CITY_LEVEL = { kind: 'estate' }, LINKS_ON = true;
@@ -1782,6 +1901,25 @@ function renderHudLegend() {
 
 /* The platforms worth drawing: enough repos to be a real dependency,
    capped so the sky doesn't turn into a cat's cradle. */
+/* Trace the level you're actually looking at. */
+var TRACE_TOKEN = 0;
+function traceCurrentLevel(level) {
+  if (!window.CBCity || !level || level.kind === 'estate') return;
+  var repo = STATE.repos.filter(function (r) { return r.name === level.repo; })[0];
+  if (!repo) return;
+  var paths = [];
+  window.CBCity.districts.forEach(function (d) {
+    d.towers.forEach(function (t) { paths.push(t.file.path); });
+  });
+  var token = ++TRACE_TOKEN;
+  window.CBCity.setFileLinks([]);
+  traceDependencies(repo, paths, function (edges) {
+    if (token !== TRACE_TOKEN) return;
+    window.CBCity.setFileLinks(LINKS_ON ? edges : []);
+    window.CBCity._traceEdges = edges;
+  });
+}
+
 function buildCityLinks() {
   if (!window.CBCity || !window.CBCity.buildLinks) return;
   var counts = platformCounts();
@@ -1821,7 +1959,8 @@ function renderCrumbs(crumbs, level, summary) {
   var hr = $('#hud-result');
   if (hr && summary) hr.textContent = summary;
   if (level && level.kind === 'estate') buildCityLinks();
-  $('#links-toggle').hidden = !!(level && level.kind !== 'estate');
+  else traceCurrentLevel(level);
+  $('#links-toggle').hidden = false;
   /* search and the type legend only mean anything across the whole estate */
   var inside = level && level.kind !== 'estate';
   $('#hud-legend').hidden = !!inside;
@@ -1924,7 +2063,11 @@ function wireWorldHud() {
   $('#links-toggle').addEventListener('click', function () {
     LINKS_ON = !LINKS_ON;
     this.setAttribute('aria-pressed', LINKS_ON ? 'true' : 'false');
-    if (window.CBCity) window.CBCity.setLinksVisible(LINKS_ON);
+    if (!window.CBCity) return;
+    window.CBCity.setLinksVisible(LINKS_ON);
+    if (CITY_LEVEL && CITY_LEVEL.kind !== 'estate') {
+      window.CBCity.setFileLinks(LINKS_ON ? (window.CBCity._traceEdges || []) : []);
+    }
   });
   $('#world-reset').addEventListener('click', function () {
     if (!window.CBCity) return;
