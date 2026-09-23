@@ -1664,8 +1664,13 @@ function renderEmptyEverything() {
    ============================================================ */
 function observeReveals() {
   var nodes = $$('.reveal');
-  if (!('IntersectionObserver' in window)) {
-    nodes.forEach(function (n) { n.setAttribute('data-in', '1'); });
+  function revealAll() { nodes.forEach(function (n) { n.setAttribute('data-in', '1'); }); }
+
+  /* A backgrounded tab isn't rendered, so IntersectionObserver reports nothing
+     and timers are throttled. Nobody is watching an animation they can't see —
+     just show everything and skip the choreography. */
+  if (!('IntersectionObserver' in window) || document.visibilityState !== 'visible') {
+    revealAll();
     return;
   }
   var io = new IntersectionObserver(function (entries) {
@@ -1675,14 +1680,11 @@ function observeReveals() {
   }, { rootMargin: '0px 0px -8% 0px', threshold: 0.05 });
   nodes.forEach(function (n) { io.observe(n); });
 
-  /* Safety net: a missed animation is nothing, invisible content is everything.
-     Observers can stay quiet in a backgrounded or throttled tab, so reveal
-     anything still hidden after a beat regardless. */
-  setTimeout(function () {
-    nodes.forEach(function (n) {
-      if (n.getAttribute('data-in') !== '1') { n.setAttribute('data-in', '1'); io.unobserve(n); }
-    });
-  }, 1600);
+  /* Safety net: a missed animation is nothing, invisible content is everything. */
+  setTimeout(revealAll, 2000);
+  document.addEventListener('visibilitychange', function () {
+    if (document.visibilityState !== 'visible') revealAll();
+  });
 }
 
 function syncHeaderHeight() {

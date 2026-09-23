@@ -780,14 +780,16 @@ kbd {
   -webkit-background-clip: text; background-clip: text; color: transparent;
 }
 
-/* ---------- 19. Reveal ---------- */
-.reveal { opacity: 0; transform: translateY(14px); }
-.reveal[data-in="1"] { opacity: 1; transform: none; transition: opacity .5s var(--ease), transform .5s var(--ease); }
+/* ---------- 19. Reveal ----------
+   Scoped to .js so the page is readable if the script fails, is blocked, or
+   never gets to run. Content must never depend on an animation firing. */
+.js .reveal { opacity: 0; transform: translateY(14px); }
+.js .reveal[data-in="1"] { opacity: 1; transform: none; transition: opacity .5s var(--ease), transform .5s var(--ease); }
 
 @media (prefers-reduced-motion: reduce) {
   *, *::before, *::after {
     animation-duration: .001ms !important; animation-iteration-count: 1 !important;
     transition-duration: .001ms !important; scroll-behavior: auto !important;
   }
-  .reveal { opacity: 1; transform: none; }
+  .js .reveal { opacity: 1; transform: none; }
 }
