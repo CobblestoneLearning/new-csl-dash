@@ -13,7 +13,7 @@
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
 <link rel="preconnect" href="https://api.github.com" crossorigin />
 <link href="https://fonts.googleapis.com/css2?family=Montserrat:wght@300;400;500;600;700;800&display=swap" rel="stylesheet" />
-<link rel="stylesheet" href="assets/theme.css?v=3c535986" />
+<link rel="stylesheet" href="assets/theme.css?v=9acc6403" />
 <script>document.documentElement.className += " js";</script>
 </head>
 <body>
@@ -71,8 +71,9 @@
   <div class="world-host" id="world-host"></div>
 
   <div class="world-boot" id="world-boot">
-    <div class="loader-ring" aria-hidden="true"></div>
-    <p>Laying the estate…</p>
+    <p class="boot-title">Building the city</p>
+    <p class="boot-sub">reading every file tree in the estate</p>
+    <div class="boot-bar"><i id="city-progress"></i></div>
   </div>
 
   <div class="hud" id="hud">
@@ -81,7 +82,7 @@
         <span class="sr-only">Search the estate</span>
         <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" aria-hidden="true"><circle cx="11" cy="11" r="7"/><line x1="21" y1="21" x2="16.65" y2="16.65"/></svg>
         <input type="search" id="world-search" autocomplete="off"
-               placeholder="Search — watch the matches rise…" />
+               placeholder="Search — watch the city light up…" />
         <button type="button" id="world-search-clear" aria-label="Clear search" hidden>
           <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" aria-hidden="true"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>
         </button>
@@ -98,7 +99,7 @@
         <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M3 12a9 9 0 1 0 3-6.7"/><polyline points="3 3 3 9 9 9"/></svg>
         Reset view
       </button>
-      <p class="hud-help">drag to orbit · scroll to zoom · click a stone · double-click to open</p>
+      <p class="hud-help">drag to orbit · scroll to zoom · click a tower · double-click to open the repo</p>
     </div>
   </div>
 
@@ -413,33 +414,32 @@
 </div>
 
 <script src="assets/config.js?v=84643cce"></script>
-<script src="assets/app.js?v=49f2e15b"></script>
+<script src="assets/app.js?v=67041b73"></script>
 <script type="importmap">
 { "imports": { "three": "./assets/vendor/three.module.min.js" } }
 </script>
 <script type="module">
   /* Progressive enhancement: no WebGL (or a module that throws) drops the
-     page straight into List mode, which holds all the same data. */
-  import { mountWorld } from './assets/world.js?v=acbbd369';
+     page into List mode, which holds all the same data. */
+  import { mountCity } from './assets/city.js?v=f346af4c';
 
   const host = document.getElementById('world-host');
-  let world = null;
+  let city = null;
 
   function boot() {
-    if (world || !window.CBData || !window.CBData.repos.length) return;
-    world = mountWorld(host, {
+    if (city || !window.CBData || !window.CBData.repos.length) return;
+    city = mountCity(host, {
       onPick(name) { window.CBHub.openRepo(name); },
-      onSelect(repo) { window.CBHub.inspect(repo); },
-      onHover(repo, ev) {
+      onSelect(repo, file) { window.CBHub.inspect(repo, file); },
+      onHover(repo, file, ev) {
         if (!repo || !ev) { window.CBHub.hideTip(); return; }
-        window.CBHub.showTip(ev, window.CBHub.tipFor(repo));
+        window.CBHub.showTip(ev, window.CBHub.tipFor(repo, file));
         window.CBHub.moveTip(ev);
-      },
-      onReady() { document.getElementById('world-boot').hidden = true; }
+      }
     });
-    if (!world) { window.CBHub.noWorld(); return; }
-    world.setData(window.CBData.repos, window.CBData.types);
-    window.CBWorld = world;
+    if (!city) { window.CBHub.noWorld(); return; }
+    window.CBCity = city;
+    city.setRepos(window.CBData.repos, window.CBData.types);
     window.CBHub.worldReady();
   }
 

@@ -551,7 +551,8 @@ function enrichLanguages() {
   }, 180);
 
   var relay = debounce(function () {
-    if (window.CBWorld && window.CBWorld.setData) window.CBWorld.setData(STATE.repos, TYPES);
+    /* tower heights come from the file tree, not the repo total — nothing
+       to re-lay when language bytes land */
   }, 900);
 
   function pump() {
@@ -1008,7 +1009,7 @@ function applyFilters() {
   });
   var filtering = !!STATE.q || STATE.platform !== 'all' || STATE.type !== 'all' || STATE.purpose !== 'all';
   syncMapToFilter(filtering ? names : null);
-  if (window.CBWorld) window.CBWorld.setFilter(filtering ? names : null);
+  if (window.CBCity) window.CBCity.setFilter(filtering ? names : null);
   var hr = $('#hud-result');
   if (hr) {
     var lit = Object.keys(names).length;
@@ -1632,8 +1633,9 @@ function publishData() {
   window.CBData = { repos: STATE.repos, types: TYPES };
   document.dispatchEvent(new CustomEvent('cb:data'));
   /* language enrichment changes stone heights — re-lay when it lands */
-  if (window.CBWorld && window.CBWorld.setData) {
-    window.CBWorld.setData(STATE.repos, TYPES);
+  if (window.CBCity && window.CBCity.setRepos) {
+    window.CBCity.setRepos(STATE.repos, TYPES);
+    fetchTrees();
   }
   renderHudFigures();
   renderHudLegend();
@@ -1641,9 +1643,16 @@ function publishData() {
 
 window.CBHub = {
   openRepo: function (name) { openRepo(name); },
-  tipFor: function (repo) { return mapTipHtml(repo); },
+  tipFor: function (repo, file) {
+    if (!file) return mapTipHtml(repo);
+    return '<div class="tip-title">' + esc(file.path) + '</div>' +
+      '<div class="tip-desc">' + esc(repo.isSnippet ? repo.label : repo.name) + '</div>' +
+      '<div class="tip-meta"><span><b>' + esc(fmtBytes(file.size)) + '</b></span>' +
+      '<span>' + esc((TYPE_BY_ID[repo.type] || {}).label || repo.type) + '</span></div>';
+  },
   showTip: showTip, moveTip: moveTip, hideTip: hideTip,
   inspect: renderInspector,
+  focus: function (n) { if (window.CBCity) window.CBCity.focus(n); },
   worldReady: function () { WORLD_OK = true; renderHudLegend(); renderHudFigures(); },
   noWorld: function () {
     WORLD_OK = false;
@@ -1652,6 +1661,64 @@ window.CBHub = {
     $('#fallback-list').addEventListener('click', function () { setMode('list'); });
   }
 };
+
+/* ============================================================
+   15b2. File trees — the city's raw material
+   ------------------------------------------------------------
+   One `git/trees?recursive=1` call per repo (~109). Signed in that's
+   well inside the 5,000/hr budget; signed out only the public repos
+   are listed, so it's a handful. Cached per repo against pushed_at,
+   and fed to the city as each lands so districts rise in waves.
+   ============================================================ */
+var TREES_DONE = 0;
+
+function fetchTrees() {
+  var list = STATE.repos.slice();
+  TREES_DONE = 0;
+  var idx = 0, CONC = 6;
+
+  function feed(repo, files) {
+    TREES_DONE++;
+    if (window.CBCity) window.CBCity.addRepoTree(repo.name, files);
+    var el = $('#city-progress');
+    if (el) {
+      var pctDone = Math.round((TREES_DONE / list.length) * 100);
+      el.style.width = pctDone + '%';
+      if (TREES_DONE >= list.length) {
+        var boot = $('#world-boot');
+        if (boot) boot.hidden = true;
+      }
+    }
+  }
+
+  function one(repo) {
+    var key = 'cb2_tree_' + repo.name + '_' + (repo.pushed || '');
+    var cached = null;
+    try { cached = sessionStorage.getItem(key); } catch (e) {}
+    if (cached) {
+      try { feed(repo, JSON.parse(cached)); return Promise.resolve(); } catch (e) {}
+    }
+    return ghFetch('https://api.github.com/repos/' + ACCOUNT + '/' + repo.name +
+        '/git/trees/' + encodeURIComponent(repo.branch) + '?recursive=1')
+      .then(function (r) { return r.ok ? r.json() : null; })
+      .then(function (d) {
+        var files = ((d && d.tree) || [])
+          .filter(function (n) { return n.type === 'blob'; })
+          .map(function (n) { return { p: n.path, s: n.size || 0 }; });
+        try { sessionStorage.setItem(key, JSON.stringify(files)); } catch (e) {}
+        feed(repo, files);
+      })
+      .catch(function () { feed(repo, []); });
+  }
+
+  function pump() {
+    if (idx >= list.length) return;
+    var batch = list.slice(idx, idx + CONC);
+    idx += CONC;
+    Promise.all(batch.map(one)).then(pump);
+  }
+  pump();
+}
 
 /* ============================================================
    15c. World mode — HUD, legend, inspector
@@ -1667,7 +1734,7 @@ function setMode(mode) {
   $('#world').hidden = mode !== 'world';
   $('#main').hidden = mode !== 'list';
   try { localStorage.setItem('cb2_mode', mode); } catch (e) {}
-  if (window.CBWorld) window.CBWorld._sync();
+  if (window.CBCity) window.CBCity._sync();
   if (mode === 'world') hideTip();
 }
 
@@ -1707,7 +1774,7 @@ function renderHudLegend() {
   });
 }
 
-function renderInspector(repo) {
+function renderInspector(repo, file) {
   var el = $('#inspector');
   if (!el) return;
   if (!repo) { el.hidden = true; el.innerHTML = ''; return; }
@@ -1718,6 +1785,7 @@ function renderInspector(repo) {
     '<p class="insp-kicker"><span class="hud-swatch" style="background:' + t.color + '"></span>' +
       esc(t.label.replace(/s$/, '')) + (repo.isPrivate ? ' · private' : '') + '</p>' +
     '<h3 class="insp-name">' + esc(repo.isSnippet ? repo.label : repo.name) + '</h3>' +
+    (file ? '<p class="insp-file"><code>' + esc(file.path) + '</code><span>' + esc(fmtBytes(file.size)) + '</span></p>' : '') +
     '<p class="insp-desc">' + esc(repo.desc || 'No description on GitHub yet.') + '</p>' +
     '<div class="insp-grid">' +
       '<div><span>Code</span><b>' + esc(fmtBytes(repo.bytes)) + '</b></div>' +
@@ -1730,11 +1798,13 @@ function renderInspector(repo) {
     '<div class="insp-actions">' +
       '<button type="button" class="btn btn-primary btn-sm" data-open="' + esc(repo.name) + '">Open docs</button>' +
       (repo.demo ? '<button type="button" class="btn btn-outline btn-sm" data-demo="' + esc(repo.name) + '">Demo</button>' : '') +
-      '<a class="btn btn-ghost btn-sm" href="' + esc(repo.url) + '" target="_blank" rel="noopener noreferrer">GitHub' + svg(ICON.ext, 12) + '</a>' +
+      (file ? '<a class="btn btn-ghost btn-sm" href="' + esc(repo.url) + '/blob/' + esc(repo.branch) + '/' + esc(file.path) +
+        '" target="_blank" rel="noopener noreferrer">This file' + svg(ICON.ext, 12) + '</a>'
+            : '<a class="btn btn-ghost btn-sm" href="' + esc(repo.url) + '" target="_blank" rel="noopener noreferrer">GitHub' + svg(ICON.ext, 12) + '</a>') +
     '</div>';
   $('.insp-close', el).addEventListener('click', function () {
     renderInspector(null);
-    if (window.CBWorld) window.CBWorld._select(-1);
+    if (window.CBCity) window.CBCity.clearSelection();
   });
   wireCards(el);
 }
@@ -1744,7 +1814,7 @@ function wireWorldHud() {
     b.addEventListener('click', function () { setMode(b.getAttribute('data-mode')); });
   });
   $('#world-reset').addEventListener('click', function () {
-    if (window.CBWorld) window.CBWorld.resetView();
+    if (window.CBCity) window.CBCity.resetView();
   });
 
   var ws = $('#world-search'), wc = $('#world-search-clear');
@@ -1763,7 +1833,7 @@ function wireWorldHud() {
   document.addEventListener('keydown', function (e) {
     if (e.key === 'Escape' && MODE === 'world' && $('#modal').getAttribute('data-open') !== '1') {
       renderInspector(null);
-      if (window.CBWorld) window.CBWorld._select(-1);
+      if (window.CBCity) window.CBCity.clearSelection();
     }
   });
 }

@@ -23,48 +23,36 @@ The account grew from ~19 repositories to **109**, and the v1 page broke in thre
 
 **Two modes, switched in the header.**
 
-**Estate** (default) is a navigable 3D world, not a hero graphic. The Cobblestone mark is a
-graduation cap paved with cobblestones, so here the cap is monumental and you fly over it — one
-stone per repository:
+### Estate — the city
+
+109 cubes is a chart with a camera on it. So the Estate is built one storey down: **every file in
+every repository is a tower.** ~2,400 of them, laid out from each repo's actual
+`git/trees?recursive=1`, so the skyline is the shape of the codebase rather than a decoration of it.
 
 | | |
 |---|---|
-| footprint | squarified treemap area, from bytes of source |
-| height | extrusion, from bytes of source |
-| district | repo type |
-| tint | how recently it was pushed |
+| district | a repository (treemap over the cap) |
+| block | a folder — recursive, to any depth; the padding at each level is what leaves streets |
+| tower | a file, height from its bytes |
+| lit windows | ignition — search, hover, selection |
 
-- orbit / pan / zoom the whole estate with real camera controls
-- district labels float above their blocks; **repo labels resolve as you descend**
-- click a stone and the camera flies to it, with an inspector panel
-- **search and the matches rise out of the paving under light columns**, and the camera
-  reframes onto them — `learndash` lifts 44 stones and greys the other 65
-- double-click a stone (or click its label) to open its docs
+- **Trees stream in and districts rise as they land**, so the city builds itself in waves.
+- **Search sends a shockwave out from the centre** and towers ignite as it passes them.
+  `learndash` lights 44 districts white-hot and leaves the other 65 dark.
+- **Click a tower** and the camera flies in; the inspector names the exact file and links
+  straight to it on GitHub. Double-click opens the repo's docs.
+- **Labels are ranked by district size** and revealed as you descend — all 109 at once is
+  confetti, not navigation.
+- Orbit / pan / zoom down to street level, among the towers.
 
-Nothing in the geometry is decorative. Delete a repo and a stone disappears.
+It is night here on purpose: the windows *are* the data, and bloom needs headroom a white page
+doesn't have.
 
-**List** is the whole flat page — masthead, charts, the tile map, cards, snippet library,
-preview rail — holding exactly the same data. It's one click away, it's what you get when WebGL
-is unavailable, and it's where the keyboard-driven work happens.
-- **Metrics that survive growth** — repository count, exact source size, platforms integrated,
-  and how many things you can open right here. No vanity zeros, no time-series (see below).
-- **Two separate dimensions.** *Type* (plugin / theme / snippet / app / site) drives every chart
-  colour. *Purpose* (reporting / authoring / translation / platform / ops / tools / web) drives
-  the Staff-view sections. Both resolve from GitHub topics first, then `CURATED`.
-- **A real snippet library** — the 65 `csl-snippet-*` repos get their own faceted section,
-  filterable by client site and by platform, instead of competing with the projects.
-- **Staff / Developer views**, sharpened: staff get purpose sections, plain-language summaries and
-  "Works with" chips; developers get a dense table with type, language, size, clone and files.
-- **⌘K command palette** over every repository.
-- **Progressive enrichment** — after the repo list lands, `/languages` is fetched per repo
-  (6 at a time, cached in `sessionStorage` keyed by `pushed_at`) so the composition chart is
-  measured exactly rather than estimated.
+### List — everything, flat
 
-### Why there is no activity-over-time chart
-
-There was going to be one. GitHub says 89 of the 109 repos were created in a single month —
-because they were bulk-imported, not authored then. Any cadence histogram would be one giant bar
-telling a lie. Platform coverage and client-site coverage replaced it; both vary honestly.
+The whole light page — masthead, charts, tile map, cards, snippet library, preview rail —
+holding exactly the same data. One click away, and what you get automatically when WebGL is
+unavailable. It is where the keyboard-driven work happens.
 
 ## Architecture
 
@@ -76,8 +64,8 @@ No build step, no package manager, no server code. Four files:
 | `assets/theme.css` | The whole design system: tokens, components, responsive rules |
 | `assets/config.js` | **Data, not logic** — types, purposes, platforms, sites, `CURATED`, palettes |
 | `assets/app.js` | Everything else, as one IIFE |
-| `assets/stage.js` | The WebGL mortarboard (ES module, three.js) |
-| `assets/vendor/three.module.min.js` | three.js r169, vendored |
+| `assets/city.js` | The Estate (ES module, three.js) |
+| `assets/vendor/` | three.js r169 + OrbitControls, CSS2DRenderer, EffectComposer/UnrealBloom |
 
 v1 was a single 195 KB `index.html`; this is split so the config a human actually edits
 (`CURATED`, `PLATFORMS`) is findable. Tailwind is gone — the CSS is hand-written against
@@ -89,13 +77,17 @@ from `app.js`; they meet over `window.CBHub` and a `cb:data` event rather than a
 either can arrive first. If WebGL is missing or the module throws, `mountStage()` returns null
 and the page is unaffected.
 
-### The stage's layout
+### The city's layout
 
-`squarify()` is a standard squarified treemap. It runs twice — once over the type districts, then
-again inside each district over its repos — which is what produces the irregular, hand-laid stone
-pattern the logo has while keeping area proportional to code size. Heights use a `^0.34` power
-curve rather than a log: a log flattened a 12 KB snippet to 65% of a 4 MB repo and the snippet
-district rendered as one blue slab, which was the exact problem this rebuild exists to fix.
+`squarify()` is a standard squarified treemap, run at three levels: type districts → repos →
+the recursive folder tree inside each repo. Padding shrinks with depth, and that padding is what
+reads as streets. Tower heights use a `^0.38` power curve rather than a log — a log flattens a
+1 KB file and a 400 KB file to nearly the same height and the skyline dies.
+
+Windows are injected into `MeshStandardMaterial` via `onBeforeCompile`, so the towers still take
+real PBR lighting while the window grid and the ignition glow ride on top as emissive. The grid's
+row count is derived from each tower's true height, so a tall file reads as a tall building
+instead of a stretched texture.
 
 ### Adding or re-filing a project
 
