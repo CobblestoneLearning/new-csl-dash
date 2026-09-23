@@ -30,11 +30,12 @@ import { EffectComposer } from './vendor/addons/postprocessing/EffectComposer.js
 import { RenderPass } from './vendor/addons/postprocessing/RenderPass.js';
 import { UnrealBloomPass } from './vendor/addons/postprocessing/UnrealBloomPass.js';
 import { OutputPass } from './vendor/addons/postprocessing/OutputPass.js';
-import { archetypeGeometry, archetypeFor, fileColor, extOf } from './architecture.js';
+import { archetypeGeometry, archetypeFor, fileColor, extOf, signatureOf } from './architecture.js';
 
 const REDUCED = window.matchMedia('(prefers-reduced-motion: reduce)');
 const CAP = 260;
 const MAX_H = 46;
+const YAXIS = new THREE.Vector3(0, 1, 0);
 const easeInOut = (t) => (t < 0.5 ? 4 * t * t * t : 1 - Math.pow(-2 * t + 2, 3) / 2);
 
 /* ---------- squarified treemap ---------- */
@@ -174,6 +175,7 @@ export class City {
 
     this.trees = new Map();        /* repo -> raw file list  */
     this.roots = new Map();        /* repo -> directory tree */
+    this.signatures = new Map();   /* repo -> architectural signature */
     this.districts = [];
     this.batches = new Map();
     this._plateQueue = [];
@@ -288,6 +290,8 @@ export class City {
     this.towerMat = towerMaterial();
     this.raycaster = new THREE.Raycaster();
     this.labels = [];
+    this.hubLabels = [];
+    this.linksOn = true;
     this._initComposer();
     this._resize();
   }
@@ -332,6 +336,7 @@ export class City {
   addRepoTree(name, files) {
     this.trees.set(name, files || []);
     this.roots.set(name, toTree(files || []));
+    this.signatures.set(name, signatureOf(name, files || []));
     if (this.level.kind === 'estate') this._build(true);
   }
 
@@ -398,9 +403,131 @@ export class City {
     this.skirt.scale.set(k, 1, k);
   }
 
+  /* ================================================================
+     CONNECTIONS — what plugs into what.
+     ----------------------------------------------------------------
+     Repos carry platform topics (LearnDash, BuddyBoss, WooCommerce…).
+     Each platform gets a beacon above the city and every repo that
+     uses it throws an arc up to it, with light running along the arc.
+     Pairwise links would be 900+ lines for LearnDash alone; hub and
+     spoke says the same thing and stays readable.
+     ================================================================ */
+  buildLinks(platforms) {
+    this._clearLinks();
+    if (!platforms || !platforms.length || this.level.kind !== 'estate') return;
+    this.platforms = platforms;
+
+    const hubs = [];
+    const R = CAP * 0.40, Y = MAX_H * 3.4;
+    platforms.forEach((p, i) => {
+      const a = (i / platforms.length) * Math.PI * 2 - Math.PI / 2;
+      hubs.push({ id: p.id, label: p.label, color: p.color,
+        pos: new THREE.Vector3(Math.cos(a) * R, Y + (i % 3) * 18, Math.sin(a) * R), count: 0 });
+    });
+
+    const verts = [], cols = [];
+    const curves = [];
+    const c = new THREE.Color();
+    this.districts.forEach((d) => {
+      const repo = d.repo;
+      if (!repo || !repo.platforms) return;
+      const from = new THREE.Vector3(d.x + d.w / 2, MAX_H * 0.7, d.y + d.h / 2);
+      repo.platforms.forEach((pid) => {
+        const hub = hubs.find((h) => h.id === pid);
+        if (!hub) return;
+        hub.count++;
+        const mid = from.clone().lerp(hub.pos, 0.5);
+        mid.y += 34;
+        const curve = new THREE.QuadraticBezierCurve3(from, mid, hub.pos);
+        const pts = curve.getPoints(18);
+        c.set(hub.color);
+        for (let k = 0; k < pts.length - 1; k++) {
+          verts.push(pts[k].x, pts[k].y, pts[k].z, pts[k + 1].x, pts[k + 1].y, pts[k + 1].z);
+          const f0 = k / pts.length, f1 = (k + 1) / pts.length;
+          cols.push(c.r, c.g, c.b, c.r, c.g, c.b);
+          void f0; void f1;
+        }
+        curves.push(curve);
+      });
+    });
+    if (!curves.length) return;
+
+    const g = new THREE.BufferGeometry();
+    g.setAttribute('position', new THREE.Float32BufferAttribute(verts, 3));
+    g.setAttribute('color', new THREE.Float32BufferAttribute(cols, 3));
+    this.links = new THREE.LineSegments(g, new THREE.LineBasicMaterial({
+      vertexColors: true, transparent: true, opacity: 0.38, depthWrite: false
+    }));
+    this.links.frustumCulled = false;
+    this.rig.add(this.links);
+
+    /* light running along every arc */
+    this.curves = curves;
+    const pn = curves.length;
+    const pg = new THREE.BufferGeometry();
+    pg.setAttribute('position', new THREE.Float32BufferAttribute(new Float32Array(pn * 3), 3));
+    const pc = new Float32Array(pn * 3);
+    curves.forEach((cv, i) => {
+      const hub = hubs.find((h) => h.pos.equals(cv.v2));
+      c.set(hub ? hub.color : 0x27aae1);
+      pc[i * 3] = c.r; pc[i * 3 + 1] = c.g; pc[i * 3 + 2] = c.b;
+    });
+    pg.setAttribute('color', new THREE.Float32BufferAttribute(pc, 3));
+    this.pulses = new THREE.Points(pg, new THREE.PointsMaterial({
+      size: 3.4, vertexColors: true, transparent: true, opacity: 1.0,
+      depthWrite: false, blending: THREE.AdditiveBlending, sizeAttenuation: true
+    }));
+    this.pulses.frustumCulled = false;
+    this.pulseOffset = new Float32Array(pn);
+    for (let i = 0; i < pn; i++) this.pulseOffset[i] = Math.random();
+    this.rig.add(this.pulses);
+
+    hubs.filter((h) => h.count).forEach((h) => {
+      const el = document.createElement('div');
+      el.className = 'city-hub';
+      el.innerHTML = '<span class="ch-dot" style="background:' + h.color + '"></span>' +
+        '<span class="ch-name"></span><span class="ch-n">' + h.count + '</span>';
+      el.querySelector('.ch-name').textContent = h.label;
+      const obj = new CSS2DObject(el);
+      obj.position.copy(h.pos);
+      this.rig.add(obj);
+      this.hubLabels.push(obj);
+    });
+  }
+
+  setLinksVisible(on) {
+    this.linksOn = on;
+    if (this.links) this.links.visible = on;
+    if (this.pulses) this.pulses.visible = on;
+    this.hubLabels.forEach((o) => { o.element.style.display = on ? '' : 'none'; });
+  }
+
+  _clearLinks() {
+    [this.links, this.pulses].forEach((o) => {
+      if (!o) return;
+      this.rig.remove(o); o.geometry.dispose(); o.material.dispose();
+    });
+    this.links = null; this.pulses = null; this.curves = null;
+    this.hubLabels.forEach((o) => { this.rig.remove(o); if (o.element.parentNode) o.element.remove(); });
+    this.hubLabels = [];
+  }
+
+  _stepPulses(now) {
+    if (!this.pulses || !this.curves || !this.linksOn) return;
+    const arr = this.pulses.geometry.getAttribute('position');
+    const t = now * 0.00016;
+    const v = new THREE.Vector3();
+    for (let i = 0; i < this.curves.length; i++) {
+      const u = (t + this.pulseOffset[i]) % 1;
+      this.curves[i].getPoint(u, v);
+      arr.setXYZ(i, v.x, v.y, v.z);
+    }
+    arr.needsUpdate = true;
+  }
+
   /* ---- build the districts for the current level ---- */
   _build(incremental) {
-    if (!incremental) this._clearDistricts();
+    if (!incremental) { this._clearDistricts(); this._clearLinks(); }
     if (this.level.kind === 'estate') this._buildEstate(incremental);
     else this._buildInside();
   }
@@ -437,7 +564,7 @@ export class City {
         color: this.typeColor[e.type] || '#27AAE1',
         x: e.cell.x, y: e.cell.y, w: e.cell.w, h: e.cell.h,
         target: { kind: 'repo', repo: repo.name },
-        repo, cells, colorBy: 'district'
+        repo, cells, colorBy: 'district', sig: this.signatures.get(repo.name)
       });
     });
   }
@@ -487,7 +614,7 @@ export class City {
         target: it.kind === 'dir'
           ? { kind: 'dir', repo: lv.repo, path: (lv.kind === 'repo' ? '' : lv.path + '/') + it.name }
           : null,
-        repo, cells: inner, colorBy: 'file'
+        repo, cells: inner, colorBy: 'file', sig: this.signatures.get(lv.repo)
       });
     });
   }
@@ -497,10 +624,11 @@ export class City {
     let maxSize = 1;
     spec.cells.forEach((c) => { maxSize = Math.max(maxSize, c.file.size || 0); });
 
+    const sig = spec.sig || { verticality: 1, slender: 0.9, twist: 0, crown: 1, hueShift: 0 };
     const d = {
       key: spec.key, label: spec.label, sub: spec.sub, color: spec.color,
       x: spec.x, y: spec.y, w: spec.w, h: spec.h,
-      target: spec.target, repo: spec.repo,
+      target: spec.target, repo: spec.repo, sig,
       towers: [], t0: performance.now()
     };
 
@@ -520,15 +648,25 @@ export class City {
       cells.forEach((c) => {
         const i = batch.n++;
         const mag = Math.pow((c.file.size || 0) / maxSize, 0.38);
-        const h = 1.6 + mag * MAX_H;
+        const h = (1.6 + mag * MAX_H) * sig.verticality;
         batch.hs[i] = h;
-        batch.seeds[i] = (((i * 2654435761) >>> 0) % 1000) / 1000;
+        const seed = (((i * 2654435761) >>> 0) % 1000) / 1000;
+        batch.seeds[i] = seed;
         col.set(fileColor(c.file.path));
+        col.offsetHSL(sig.hueShift, 0, 0);
         batch.mesh.setColorAt(i, col);
+
+        /* Rotating a building would push it out of its cell, so shrink the
+           footprint by exactly what the rotation costs. */
+        const rot = sig.twist * (seed - 0.5) * 2;
+        const fit = 1 / (Math.abs(Math.cos(rot)) + Math.abs(Math.sin(rot)));
+        const fw = Math.max(0.3, (c.w - 0.26) * sig.slender * fit);
+        const fd = Math.max(0.3, (c.h - 0.26) * sig.slender * fit);
+
         const t = {
           file: c.file, repo: spec.repo, district: d, batch, i,
           x: c.x + c.w / 2, z: c.y + c.h / 2,
-          w: Math.max(0.3, c.w - 0.26), dd: Math.max(0.3, c.h - 0.26),
+          w: fw, dd: fd, rot,
           h, lit: 0, litTarget: 0, delay: 0,
           order: d.towers.length / Math.max(1, spec.cells.length)
         };
@@ -633,6 +771,7 @@ export class City {
         const e = 1 - Math.pow(1 - stagger, 4);
         p.set(t.x, 0, t.z);
         sc.set(t.w, Math.max(0.05, t.h * e), t.dd);
+        q.setFromAxisAngle(YAXIS, t.rot || 0);
         m.compose(p, q, sc);
         b.mesh.setMatrixAt(i, m);
       }
@@ -865,6 +1004,7 @@ export class City {
 
     this._flushPlates();
     this._writeBatches(now);
+    this._stepPulses(now);
 
     this.batches.forEach((b) => {
       let dirty = false;
@@ -900,6 +1040,7 @@ export class City {
   }
 
   _clearDistricts() {
+    this._clearLinks();
     this.batches.forEach((b) => {
       this.rig.remove(b.mesh); b.mesh.geometry.dispose(); b.mesh.dispose();
     });

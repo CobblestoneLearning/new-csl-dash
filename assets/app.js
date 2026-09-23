@@ -1655,6 +1655,7 @@ window.CBHub = {
   focus: function (n) { if (window.CBCity) window.CBCity.focus(n); },
   openFile: openFileSource,
   onLevel: renderCrumbs,
+  linkPlatforms: buildCityLinks,
   worldReady: function () { WORLD_OK = true; renderHudLegend(); renderHudFigures(); },
   noWorld: function () {
     WORLD_OK = false;
@@ -1689,6 +1690,9 @@ function fetchTrees() {
       if (TREES_DONE >= list.length) {
         var boot = $('#world-boot');
         if (boot) boot.hidden = true;
+        /* districts only exist once their trees land, so the arcs are
+           drawn after the city is, not when the estate is declared */
+        buildCityLinks();
       }
     }
   }
@@ -1725,7 +1729,7 @@ function fetchTrees() {
 /* ============================================================
    15c. World mode — HUD, legend, inspector
    ============================================================ */
-var MODE = 'world', WORLD_OK = false, CITY_LEVEL = { kind: 'estate' };
+var MODE = 'world', WORLD_OK = false, CITY_LEVEL = { kind: 'estate' }, LINKS_ON = true;
 
 function setMode(mode) {
   MODE = mode;
@@ -1776,6 +1780,24 @@ function renderHudLegend() {
   });
 }
 
+/* The platforms worth drawing: enough repos to be a real dependency,
+   capped so the sky doesn't turn into a cat's cradle. */
+function buildCityLinks() {
+  if (!window.CBCity || !window.CBCity.buildLinks) return;
+  var counts = platformCounts();
+  var list = PLATFORMS
+    .filter(function (p) { return (counts[p.id] || 0) >= 3; })
+    .sort(function (a, b) { return counts[b.id] - counts[a.id]; })
+    .slice(0, 9)
+    .map(function (p, i) {
+      var HUES = ['#0072B2', '#D48200', '#00916A', '#C4719B', '#5BB8EC',
+                  '#7E6BB5', '#6F8A5B', '#B5686B', '#4E6070'];
+      return { id: p.id, label: p.label, color: HUES[i % HUES.length] };
+    });
+  window.CBCity.buildLinks(list);
+  window.CBCity.setLinksVisible(LINKS_ON);
+}
+
 function renderCrumbs(crumbs, level, summary) {
   var host = $('#hud-crumbs');
   if (!host) return;
@@ -1798,6 +1820,8 @@ function renderCrumbs(crumbs, level, summary) {
   }
   var hr = $('#hud-result');
   if (hr && summary) hr.textContent = summary;
+  if (level && level.kind === 'estate') buildCityLinks();
+  $('#links-toggle').hidden = !!(level && level.kind !== 'estate');
   /* search and the type legend only mean anything across the whole estate */
   var inside = level && level.kind !== 'estate';
   $('#hud-legend').hidden = !!inside;
@@ -1868,6 +1892,9 @@ function renderInspector(repo, file) {
     '<h3 class="insp-name">' + esc(repo.isSnippet ? repo.label : repo.name) + '</h3>' +
     (file ? '<p class="insp-file"><code>' + esc(file.path) + '</code><span>' + esc(fmtBytes(file.size)) + '</span></p>' : '') +
     '<p class="insp-desc">' + esc(repo.desc || 'No description on GitHub yet.') + '</p>' +
+    (!file && window.CBCity && window.CBCity.signatures && window.CBCity.signatures.get(repo.name)
+      ? '<p class="insp-sig">' + esc(window.CBHub.describeSig(window.CBCity.signatures.get(repo.name))) + '</p>'
+      : '') +
     '<div class="insp-grid">' +
       '<div><span>Code</span><b>' + esc(fmtBytes(repo.bytes)) + '</b></div>' +
       '<div><span>Language</span><b>' + esc(repo.lang || '\u2014') + '</b></div>' +
@@ -1893,6 +1920,11 @@ function renderInspector(repo, file) {
 function wireWorldHud() {
   $$('#modeswitch button').forEach(function (b) {
     b.addEventListener('click', function () { setMode(b.getAttribute('data-mode')); });
+  });
+  $('#links-toggle').addEventListener('click', function () {
+    LINKS_ON = !LINKS_ON;
+    this.setAttribute('aria-pressed', LINKS_ON ? 'true' : 'false');
+    if (window.CBCity) window.CBCity.setLinksVisible(LINKS_ON);
   });
   $('#world-reset').addEventListener('click', function () {
     if (!window.CBCity) return;

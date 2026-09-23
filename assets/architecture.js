@@ -182,3 +182,70 @@ export const KEY_GLYPH = {
   stack: 'M9 22h6V9H9zM7 9h10V6H7zM10 6h4V2h-4z',
   drum: 'M5 22h14V8H5zM5 8a7 3 0 0 1 14 0z'
 };
+
+/* ===================================================================
+   SIGNATURE — every repository builds differently, from its own code.
+   -------------------------------------------------------------------
+   Archetypes vary the buildings; this varies the *city*. Real spread
+   across the estate: average nesting depth runs 0.0 (a one-file
+   snippet) to 6.7 (stripe-payment); size skew runs 0.3 (uniform) to
+   3.0 (one file dwarfing the rest); type variety runs 3 to 6.
+
+   Those become architecture, so a deep, spiky, varied repo grows a
+   dense vertical downtown and a flat uniform one sprawls low and
+   regular. Nothing is hand-assigned.
+   =================================================================== */
+function hash32(str) {
+  let h = 2166136261 >>> 0;
+  for (let i = 0; i < str.length; i++) { h ^= str.charCodeAt(i); h = Math.imul(h, 16777619) >>> 0; }
+  return h >>> 0;
+}
+const clamp = (v, a, b) => Math.max(a, Math.min(b, v));
+
+export function signatureOf(name, files) {
+  const n = files.length || 1;
+  let sumDepth = 0, maxDepth = 0;
+  const sizes = [];
+  const counts = {};
+  files.forEach((f) => {
+    const d = (f.p.match(/\//g) || []).length;
+    sumDepth += d; if (d > maxDepth) maxDepth = d;
+    sizes.push(Math.max(1, f.s || 1));
+    const a = archetypeFor(f.p);
+    counts[a] = (counts[a] || 0) + 1;
+  });
+  sizes.sort((a, b) => a - b);
+  const median = sizes[Math.floor(sizes.length / 2)] || 1;
+  const biggest = sizes[sizes.length - 1] || 1;
+
+  const avgDepth = sumDepth / n;
+  const skew = Math.log10(1 + biggest / median);         /* 0.3 – 3.0 */
+  const variety = Object.keys(counts).length;            /* 3 – 6     */
+  let dominant = 'slab', best = 0;
+  Object.keys(counts).forEach((k) => { if (counts[k] > best) { best = counts[k]; dominant = k; } });
+
+  const seed = hash32(name);
+  const r1 = ((seed >>> 3) % 1000) / 1000;
+  const r2 = ((seed >>> 13) % 1000) / 1000;
+
+  return {
+    avgDepth, maxDepth, skew, variety, dominant, seed, files: n,
+    /* how tall this district builds */
+    verticality: clamp(0.55 + avgDepth * 0.20 + skew * 0.22, 0.55, 2.6),
+    /* deep trees build slender, flat ones squat */
+    slender: clamp(0.94 - avgDepth * 0.055, 0.52, 0.94),
+    /* variety loosens the street grid; the seed decides which way */
+    twist: clamp((variety - 3) * 0.055 + r1 * 0.10, 0, 0.32) * (r2 > 0.5 ? 1 : -1),
+    /* a taller crown on the landmark of a spikier repo */
+    crown: clamp(0.5 + skew * 0.55, 0.5, 2.2),
+    hueShift: (r1 - 0.5) * 0.06
+  };
+}
+
+/* A one-line, human description of the same thing, for the inspector. */
+export function describeSignature(sig) {
+  const depth = sig.avgDepth < 0.6 ? 'flat' : sig.avgDepth < 2.2 ? 'shallow' : sig.avgDepth < 4 ? 'layered' : 'deeply nested';
+  const spread = sig.skew < 1.0 ? 'evenly sized' : sig.skew < 2.0 ? 'mixed' : 'one dominant file';
+  const mix = sig.variety <= 3 ? 'single-purpose' : sig.variety <= 4 ? 'focused' : 'broad mix';
+  return depth + ' · ' + spread + ' · ' + mix;
+}

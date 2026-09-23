@@ -86,6 +86,13 @@ To file a project: add a `cat-<id>` topic on GitHub *or* a `CURATED` line. Prefe
 - **The Estate is daylight.** It was night while the windows were the only signal; once form and
   colour became the information, dark made it unreadable. Don't reintroduce the night overrides
   in theme.css — they were removed deliberately.
+- **`signatureOf()` is what makes projects distinct.** Height, slenderness, street twist and
+  crown all come from real structure (nesting depth, size skew, type variety) plus a name hash
+  for deterministic style. Don't flatten it back to uniform scaling.
+- **Twisting a building shrinks its footprint** by `1 / (|cos| + |sin|)`, otherwise it overflows
+  its treemap cell and districts start overlapping.
+- **Links are built after the trees land, not when the estate is declared** — districts don't
+  exist until their tree arrives, so building arcs early silently produces zero curves.
 - **The city is optional, always.** `mountCity()` returns null with no WebGL, and List mode must
   still be complete. Never let a control or a piece of data live only inside `city.js`.
 - **The city is made of `git/trees`, one call per repo**, cached in `sessionStorage` against

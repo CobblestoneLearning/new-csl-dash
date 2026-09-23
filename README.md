@@ -48,6 +48,32 @@ against an app (glass JS towers) or a snippet (one lone PHP setback tower):
 | Data → silo | Docs → stele | Images → domed pavilion | Fonts → spire |
 | Scripts → industrial stack | Media → drum | | |
 
+**And every repository builds differently, from its own contents.** Archetypes vary the
+buildings; a *signature* varies the city. Real spread across the estate: average nesting depth
+runs 0.0 (a one-file snippet) to 6.7 (`stripe-payment`); size skew runs 0.3 (uniform) to 3.0
+(one file dwarfing the rest); type variety runs 3 to 6. Those become architecture:
+
+| signal | becomes |
+|---|---|
+| nesting depth + size skew | `verticality` — how tall the district builds (0.55× → 2.6×) |
+| nesting depth | `slender` — deep trees build thin towers, flat ones squat blocks |
+| type variety + name hash | `twist` — how far the street grid rotates off true |
+| size skew | `crown` — how tall the landmark stands |
+
+So `stripe-payment` (deeply nested, broad mix) grows a dense vertical downtown at 2.31×
+verticality and 0.57 slenderness, while a one-file snippet sprawls low and regular at 0.63× and
+0.94. Nothing is hand-assigned, and the inspector states each repo's signature in words.
+
+A rotated building would overflow its treemap cell, so the footprint shrinks by exactly what the
+rotation costs — `1 / (|cos θ| + |sin θ|)`.
+
+### Connections
+
+Repos carry platform topics, so each platform with three or more repos gets a **beacon above the
+city**, and every repo using it throws an arc up to it with light running along the arc. Pairwise
+links would be 900+ lines for LearnDash alone; hub-and-spoke says the same thing and stays
+readable — 191 arcs to 9 beacons. Toggleable, and estate-level only.
+
 Across the estate that's 2,427 buildings in ten forms — 1,422 PHP setbacks, 392 CSS slabs,
 210 doc steles, 189 glass towers, and so on. The on-screen key is the legend for the skyline.
 All ten are authored to one contract (footprint inside ±0.5, base at y=0, apex at y=1) so a

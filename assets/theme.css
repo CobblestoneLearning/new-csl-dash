@@ -1226,9 +1226,10 @@ body[data-mode="world"] .crumb-sep { color: var(--faint); }
 
 /* ---- shape key: the legend for the skyline ---- */
 .hud-key {
-  position: absolute; left: 50%; top: 18px; transform: translateX(-50%);
+  /* the platform beacons live in the upper middle, so the key sits along
+     the bottom between the figures panel and the buttons */
+  position: absolute; left: 470px; right: 215px; bottom: 18px;
   display: flex; flex-wrap: wrap; justify-content: center; gap: 2px 4px;
-  max-width: min(660px, calc(100vw - 880px));
   padding: 7px 10px; border-radius: var(--r-pill);
   background: rgba(255,255,255,.82); backdrop-filter: blur(10px);
   border: 1px solid var(--line); box-shadow: var(--shadow-1);
@@ -1239,4 +1240,25 @@ body[data-mode="world"] .crumb-sep { color: var(--faint); }
   padding: 2px 6px; white-space: nowrap;
 }
 .keyitem svg { width: 13px; height: 13px; flex: none; }
-@media (max-width: 1440px) { .hud-key { display: none; } }
+@media (max-width: 1280px) { .hud-key { display: none; } }
+
+/* ---- platform beacons + signature ---- */
+.city-hub {
+  display: inline-flex; align-items: center; gap: 7px; white-space: nowrap;
+  font-size: 10.5px; font-weight: 700; color: var(--ink);
+  background: rgba(255,255,255,.94); backdrop-filter: blur(8px);
+  border: 1px solid var(--line); border-radius: var(--r-pill);
+  padding: 4px 11px; box-shadow: var(--shadow-2);
+}
+.ch-dot { width: 8px; height: 8px; border-radius: 50%; flex: none; }
+.ch-n {
+  font-size: 9.5px; font-weight: 700; color: var(--muted);
+  padding-left: 6px; border-left: 1px solid var(--line); font-variant-numeric: tabular-nums;
+}
+.hud-btn[aria-pressed="false"] { opacity: .55; }
+.hud-btn[hidden] { display: none; }
+.insp-sig {
+  margin-top: 12px; padding: 7px 10px; border-radius: var(--r-sm);
+  background: rgba(39,170,225,.08); border: 1px solid rgba(39,170,225,.22);
+  font-size: 11px; font-weight: 700; color: var(--blue); letter-spacing: .01em;
+}

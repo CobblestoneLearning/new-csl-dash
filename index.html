@@ -13,7 +13,7 @@
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
 <link rel="preconnect" href="https://api.github.com" crossorigin />
 <link href="https://fonts.googleapis.com/css2?family=Montserrat:wght@300;400;500;600;700;800&display=swap" rel="stylesheet" />
-<link rel="stylesheet" href="assets/theme.css?v=89fad862" />
+<link rel="stylesheet" href="assets/theme.css?v=1fb9c6ed" />
 <script>document.documentElement.className += " js";</script>
 </head>
 <body>
@@ -98,6 +98,10 @@
     <div class="hud-key" id="hud-key" aria-label="What the shapes mean"></div>
 
     <div class="hud-br">
+      <button type="button" class="hud-btn" id="links-toggle" aria-pressed="true">
+        <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="12" cy="5" r="2.5"/><circle cx="5" cy="19" r="2.5"/><circle cx="19" cy="19" r="2.5"/><path d="M10.6 7.1 6.4 16.6M13.4 7.1l4.2 9.5"/></svg>
+        Connections
+      </button>
       <button type="button" class="hud-btn" id="world-reset">
         <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M3 12a9 9 0 1 0 3-6.7"/><polyline points="3 3 3 9 9 9"/></svg>
         Reset view
@@ -417,15 +421,15 @@
 </div>
 
 <script src="assets/config.js?v=84643cce"></script>
-<script src="assets/app.js?v=7cae0516"></script>
+<script src="assets/app.js?v=72cf9cd6"></script>
 <script type="importmap">
 { "imports": { "three": "./assets/vendor/three.module.min.js" } }
 </script>
 <script type="module">
   /* Progressive enhancement: no WebGL (or a module that throws) drops the
      page into List mode, which holds all the same data. */
-  import { mountCity } from './assets/city.js?v=7d7b8c51';
-  import { KEY, KEY_GLYPH } from './assets/architecture.js?v=49c2255e';
+  import { mountCity } from './assets/city.js?v=3412f0b5';
+  import { KEY, KEY_GLYPH, describeSignature } from './assets/architecture.js?v=9403454e';
 
   const host = document.getElementById('world-host');
   let city = null;
@@ -446,6 +450,7 @@
     window.CBCity = city;
     renderKey();
     city.setEstate(window.CBData.repos, window.CBData.types);
+    window.CBHub.describeSig = describeSignature;
     window.CBHub.worldReady();
   }
 
