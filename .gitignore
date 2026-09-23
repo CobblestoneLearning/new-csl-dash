@@ -1,0 +1,6 @@
+
+__mock.js
+.DS_Store
+# Local-only preview harness — contains PRIVATE repo metadata, never commit
+node_modules/
+preview-offline.html
