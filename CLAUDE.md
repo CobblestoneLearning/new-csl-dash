@@ -110,6 +110,12 @@ To file a project: add a `cat-<id>` topic on GitHub *or* a `CURATED` line. Prefe
 - **Size buildings from plot AREA, with inradius only as a fit check.** An elongated plot has
   plenty of ground but a tiny inradius; sizing off inradius alone made needles.
 - **`plates` is a merged Mesh, not an InstancedMesh** — it has no `.dispose()`.
+- **Nothing in the scene may sit on the clipping point.** The ground was `#f3f6f9`, which blew
+  past 1.0 under the key light and tripped the bloom threshold — so the plain itself glowed.
+  Ground is stone (`#c9d2db`), bloom threshold is 0.97, and only genuine emissive passes it.
+- **In daylight a search reads through colour, not glow.** `_recolour()` deepens matches and
+  drops the rest to slate; the window emissive alone is far too subtle against a lit scene.
+  Towers keep `baseCol` so clearing the filter can restore them exactly.
 - **The city is optional, always.** `mountCity()` returns null with no WebGL, and List mode must
   still be complete. Never let a control or a piece of data live only inside `city.js`.
 - **The city is made of `git/trees`, one call per repo**, cached in `sessionStorage` against

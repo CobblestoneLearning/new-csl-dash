@@ -236,7 +236,7 @@ export class City {
        toy shapes once they stop being plain boxes. */
     const pmrem = new THREE.PMREMGenerator(r);
     this.scene.environment = pmrem.fromScene(new RoomEnvironment(), 0.04).texture;
-    this.scene.environmentIntensity = 0.75;
+    this.scene.environmentIntensity = 0.62;
     pmrem.dispose();
 
     this.camera = new THREE.PerspectiveCamera(46, 1, 0.6, 4000);
@@ -254,7 +254,7 @@ export class City {
     c.addEventListener('start', () => { this.userMoved = true; this.flight = null; });
     this.controls = c;
 
-    const key = new THREE.DirectionalLight(0xfff4e2, 2.5);
+    const key = new THREE.DirectionalLight(0xfff4e2, 2.05);
     key.position.set(-CAP * 0.55, CAP * 0.95, CAP * 0.5);
     key.castShadow = true;
     key.shadow.mapSize.set(2048, 2048);
@@ -264,7 +264,7 @@ export class City {
     key.shadow.camera.top = s; key.shadow.camera.bottom = -s;
     key.shadow.bias = -0.0012; key.shadow.normalBias = 0.5;
     this.scene.add(key);
-    this.scene.add(new THREE.HemisphereLight(0xdcebff, 0xb9c4cf, 1.5));
+    this.scene.add(new THREE.HemisphereLight(0xcfe0f2, 0xa8b4c2, 1.05));
     const rim = new THREE.DirectionalLight(0x9fd4ef, 0.8);
     rim.position.set(CAP * 0.6, CAP * 0.28, -CAP * 0.6);
     this.scene.add(rim);
@@ -275,7 +275,7 @@ export class City {
     /* the estate is an island, so its ground is round too */
     const deck = new THREE.Mesh(
       new THREE.CylinderGeometry(CAP * 0.52, CAP * 0.50, 9, 48),
-      new THREE.MeshStandardMaterial({ color: 0xf3f6f9, roughness: 0.95, metalness: 0 })
+      new THREE.MeshStandardMaterial({ color: 0xc9d2db, roughness: 0.97, metalness: 0 })
     );
     deck.position.y = -4.5; deck.receiveShadow = true;
     this.rig.add(deck);
@@ -332,7 +332,7 @@ export class City {
     this.renderer.getSize(size);
     this.composer = new EffectComposer(this.renderer);
     this.composer.addPass(new RenderPass(this.scene, this.camera));
-    this.bloom = new UnrealBloomPass(size, 0.42, 0.55, 0.88);
+    this.bloom = new UnrealBloomPass(size, 0.62, 0.55, 0.97);
     this.composer.addPass(this.bloom);
     this.composer.addPass(new OutputPass());
   }
@@ -768,6 +768,7 @@ export class City {
         col.set(fileColor(c.file.path));
         col.offsetHSL(sig.hueShift, 0, 0);
         batch.mesh.setColorAt(i, col);
+        const baseCol = col.clone();
 
         /* The plot already decided where this stands and which way it
            faces; a building is the largest square that fits inside it. */
@@ -785,7 +786,7 @@ export class City {
           x: site.x, z: site.z,
           w: foot, dd: foot,
           rot: site.angle + sig.twist * (seed - 0.5),
-          h, lit: 0, litTarget: 0, delay: 0,
+          h, lit: 0, litTarget: 0, delay: 0, baseCol,
           order: d.towers.length / Math.max(1, spec.cells.length)
         };
         batch.towers[i] = t;
@@ -858,7 +859,7 @@ export class City {
       const g = new THREE.ExtrudeGeometry(shape, { depth: 0.55, bevelEnabled: false });
       g.rotateX(Math.PI / 2);                      /* shape is XY, the ground is XZ */
       g.translate(0, 0, 0);
-      col.set(d.color).lerp(new THREE.Color(0xffffff), 0.66);
+      col.set(d.color).lerp(new THREE.Color(0xdfe5ec), 0.46);
       const n = g.getAttribute('position').count;
       const c3 = new Float32Array(n * 3);
       for (let k = 0; k < n; k++) { c3[k * 3] = col.r; c3[k * 3 + 1] = col.g; c3[k * 3 + 2] = col.b; }
@@ -956,6 +957,7 @@ export class City {
     if (!set) {
       this.districts.forEach((d) => d.towers.forEach((t) => { t.litTarget = 0; t.delay = 0; }));
       this.ring.material.opacity = 0;
+      this._recolour();
       return;
     }
     this.districts.forEach((d) => {
@@ -965,7 +967,28 @@ export class City {
         t.litTarget = on ? 1 : 0;
       });
     });
+    this._recolour();
     this.frameMatches();
+  }
+
+  /* In daylight a glowing window alone barely reads, so a search also
+     recolours: matches deepen into their own hue, the rest drop to a
+     flat slate. Contrast does the work that glow did at night. */
+  _recolour() {
+    const col = new THREE.Color();
+    const dim = new THREE.Color(0x9aa7b4);
+    this.batches.forEach((b) => {
+      for (let i = 0; i < b.n; i++) {
+        const t = b.towers[i];
+        if (!t || !t.baseCol) continue;
+        const on = !this.filter || this.filter[t.district.key];
+        if (!this.filter) col.copy(t.baseCol);
+        else if (on) col.copy(t.baseCol).offsetHSL(0, 0.30, -0.04);
+        else col.copy(t.baseCol).lerp(dim, 0.88);
+        b.mesh.setColorAt(i, col);
+      }
+      if (b.mesh.instanceColor) b.mesh.instanceColor.needsUpdate = true;
+    });
   }
 
   frameMatches() {
