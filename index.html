@@ -13,7 +13,7 @@
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
 <link rel="preconnect" href="https://api.github.com" crossorigin />
 <link href="https://fonts.googleapis.com/css2?family=Montserrat:wght@300;400;500;600;700;800&display=swap" rel="stylesheet" />
-<link rel="stylesheet" href="assets/theme.css?v=278a4dde" />
+<link rel="stylesheet" href="assets/theme.css?v=fef2e6ff" />
 <script>document.documentElement.className += " js";</script>
 </head>
 <body>
@@ -99,6 +99,10 @@
     <div class="hud-key" id="hud-key" aria-label="What the shapes mean"></div>
 
     <div class="hud-br">
+      <button type="button" class="hud-btn hud-btn--go" id="walk-toggle">
+        <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="13" cy="4" r="2"/><path d="M11 21l1.5-6L9 12V8l4-1 3 4 3 1"/><path d="M12.5 15L9 21"/></svg>
+        Walk the streets
+      </button>
       <button type="button" class="hud-btn" id="links-toggle" aria-pressed="true">
         <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="12" cy="5" r="2.5"/><circle cx="5" cy="19" r="2.5"/><circle cx="19" cy="19" r="2.5"/><path d="M10.6 7.1 6.4 16.6M13.4 7.1l4.2 9.5"/></svg>
         Connections
@@ -112,6 +116,11 @@
   </div>
 
   <aside class="inspector" id="inspector" aria-live="polite" hidden></aside>
+
+  <div class="walk-hud" id="walk-hud" hidden>
+    <span class="walk-cross" aria-hidden="true"></span>
+    <p class="walk-help"><kbd>W</kbd><kbd>A</kbd><kbd>S</kbd><kbd>D</kbd> walk · <kbd>shift</kbd> run · move the mouse to look · <kbd>esc</kbd> to fly back up</p>
+  </div>
 </div>
 
 <main id="main">
@@ -422,15 +431,15 @@
 </div>
 
 <script src="assets/config.js?v=84643cce"></script>
-<script src="assets/app.js?v=c019b326"></script>
+<script src="assets/app.js?v=7eb8fe43"></script>
 <script type="importmap">
 { "imports": { "three": "./assets/vendor/three.module.min.js" } }
 </script>
 <script type="module">
   /* Progressive enhancement: no WebGL (or a module that throws) drops the
      page into List mode, which holds all the same data. */
-  import { mountCity } from './assets/city.js?v=7ceabbce';
-  import { KEY, KEY_GLYPH, describeSignature } from './assets/architecture.js?v=b4649c48';
+  import { mountCity } from './assets/city.js?v=89e90de7';
+  import { KEY, KEY_GLYPH, describeSignature } from './assets/architecture.js?v=71b46a72';
 
   const host = document.getElementById('world-host');
   let city = null;
@@ -441,6 +450,7 @@
       onSelect(repo, file) { window.CBHub.inspect(repo, file); },
       onOpenFile(repo, file) { window.CBHub.openFile(repo, file); },
       onLevel(crumbs, level, summary) { window.CBHub.onLevel(crumbs, level, summary); },
+      onWalk(on) { window.CBHub.onWalk(on); },
       onHover(repo, file, ev, levelKind) {
         if (!repo || !ev) { window.CBHub.hideTip(); return; }
         window.CBHub.showTip(ev, window.CBHub.tipFor(repo, levelKind === 'estate' ? null : file));

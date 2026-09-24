@@ -27,6 +27,7 @@
    =================================================================== */
 import * as THREE from 'three';
 import { mergeGeometries } from './vendor/addons/BufferGeometryUtils.js';
+import { SVGLoader } from './vendor/addons/SVGLoader.js';
 
 /* ---------- primitives, pre-translated into place ---------- */
 function box(w, h, d, y, x = 0, z = 0) {
@@ -115,7 +116,42 @@ function terraces(n, w, from, to) {
   return parts;
 }
 
-/* A small abstract figure. Reads as a statue at any distance we use. */
+/* The file-type icon, extruded into a real 3D monument.
+   There is essentially no SVG in the estate to draw from (one file across
+   109 repos), so the statues are the icons themselves — which is better
+   anyway: the monument on a landmark tells you what kind of file it is. */
+const ICON_CACHE = new Map();
+function iconGeometry(family, height) {
+  const key = family + '|' + height;
+  if (ICON_CACHE.has(key)) return ICON_CACHE.get(key);
+  let g = null;
+  try {
+    const d = KEY_GLYPH[family];
+    if (d) {
+      const doc = '<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="' + d + '"/></svg>';
+      const parsed = new SVGLoader().parse(doc);
+      const shapes = [];
+      parsed.paths.forEach((pp) => SVGLoader.createShapes(pp).forEach((sh) => shapes.push(sh)));
+      if (shapes.length) {
+        g = new THREE.ExtrudeGeometry(shapes, {
+          depth: 3.2, bevelEnabled: true, bevelThickness: 0.5,
+          bevelSize: 0.45, bevelSegments: 1, curveSegments: 4
+        });
+        g.scale(1, -1, 1);                       /* SVG y runs downward */
+        g.computeBoundingBox();
+        const bb = g.boundingBox;
+        const h = Math.max(bb.max.y - bb.min.y, 1e-3);
+        const k = height / h;
+        g.translate(-(bb.max.x + bb.min.x) / 2, -bb.min.y, -(bb.max.z + bb.min.z) / 2);
+        g.scale(k, k, k);
+      }
+    }
+  } catch (e) { g = null; }
+  ICON_CACHE.set(key, g);
+  return g;
+}
+
+/* A small abstract figure — the fallback when a family has no glyph. */
 function statue(y, s = 1) {
   return [
     box(0.24 * s, 0.045 * s, 0.24 * s, y),
@@ -136,7 +172,13 @@ const CROWNS = {
                    cone(0.22, 0.12, 8, y + 0.17), cyl(0.015, 0.015, 0.08, 5, y + 0.29)],
   spire: (y) => [box(0.44, 0.04, 0.44, y), cone(0.20, 0.30, 6, y + 0.04),
                  cyl(0.014, 0.014, 0.07, 5, y + 0.34)],
-  statue: (y) => [box(0.38, 0.04, 0.38, y), ...statue(y + 0.04, 1.0)],
+  statue: (y, family) => {
+    const icon = iconGeometry(family, 0.26);
+    return icon
+      ? [box(0.38, 0.045, 0.38, y), box(0.26, 0.05, 0.26, y + 0.045),
+         icon.clone().translate(0, y + 0.095, 0)]
+      : [box(0.38, 0.04, 0.38, y), ...statue(y + 0.04, 1.0)];
+  },
   antenna: (y) => [box(0.30, 0.03, 0.30, y), cyl(0.011, 0.028, 0.26, 5, y + 0.03),
                    box(0.10, 0.011, 0.011, y + 0.16)]
 };
@@ -206,9 +248,12 @@ function buildVariant(family, tier, crown) {
   if (tier >= 2) parts.push(...arcade(family === 'tower' ? 4 : 6, 0.47, 0.085, 0.02));
   if (tier >= 3) parts.push(...buttresses(4, 0.33, 0.49, bodyTop * 0.70));
 
-  parts.push(...(CROWNS[crown] || CROWNS.flat)(bodyTop));
+  parts.push(...(CROWNS[crown] || CROWNS.flat)(bodyTop, family));
 
-  const g = mergeGeometries(parts, false);
+  /* ExtrudeGeometry is non-indexed and the primitives are indexed;
+     mergeGeometries needs one or the other throughout. */
+  const prepared = parts.filter(Boolean).map((x) => (x.index ? x.toNonIndexed() : x));
+  const g = mergeGeometries(prepared, false);
   if (!g) return new THREE.BoxGeometry(1, 1, 1).translate(0, 0.5, 0);
 
   /* normalise into the contract: footprint ±0.5, base 0, apex 1 */

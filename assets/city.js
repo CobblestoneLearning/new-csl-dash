@@ -24,17 +24,29 @@
    =================================================================== */
 import * as THREE from 'three';
 import { OrbitControls } from './vendor/addons/OrbitControls.js';
+import { PointerLockControls } from './vendor/addons/PointerLockControls.js';
 import { CSS2DRenderer, CSS2DObject } from './vendor/addons/CSS2DRenderer.js';
 import { RoomEnvironment } from './vendor/addons/RoomEnvironment.js';
+import { mergeGeometries } from './vendor/addons/BufferGeometryUtils.js';
 import { EffectComposer } from './vendor/addons/postprocessing/EffectComposer.js';
 import { RenderPass } from './vendor/addons/postprocessing/RenderPass.js';
 import { UnrealBloomPass } from './vendor/addons/postprocessing/UnrealBloomPass.js';
 import { OutputPass } from './vendor/addons/postprocessing/OutputPass.js';
 import { variantGeometry, variantFor, archetypeFor, fileColor, extOf, signatureOf } from './architecture.js';
+import { layoutPoly, plotToSite, blobPolygon, polyCentroid, inradiusAt, polyArea, seedPlan } from './plan.js';
+
+/* The n biggest files anywhere beneath a node. */
+function flattenTop(node, n) {
+  const all = [];
+  (function walk(x) { x.files.forEach((f) => all.push(f)); x.dirs.forEach(walk); })(node);
+  all.sort((a, b) => b.value - a.value);
+  return all.slice(0, n);
+}
 
 const REDUCED = window.matchMedia('(prefers-reduced-motion: reduce)');
 const CAP = 260;
 const MAX_H = 46;
+const WALK_EYE = 2.6;          /* eye height on the street */
 const YAXIS = new THREE.Vector3(0, 1, 0);
 const easeInOut = (t) => (t < 0.5 ? 4 * t * t * t : 1 - Math.pow(-2 * t + 2, 3) / 2);
 
@@ -171,6 +183,8 @@ export class City {
     this.onSelect = opts.onSelect || (() => {});
     this.onHover = opts.onHover || (() => {});
     this.onLevel = opts.onLevel || (() => {});
+    this.onWalk = opts.onWalk || (() => {});
+    this.walking = false;
     this.onOpenFile = opts.onOpenFile || (() => {});
 
     this.trees = new Map();        /* repo -> raw file list  */
@@ -258,8 +272,9 @@ export class City {
     this.rig = new THREE.Group();
     this.scene.add(this.rig);
 
+    /* the estate is an island, so its ground is round too */
     const deck = new THREE.Mesh(
-      new THREE.BoxGeometry(CAP, 9, CAP),
+      new THREE.CylinderGeometry(CAP * 0.52, CAP * 0.50, 9, 48),
       new THREE.MeshStandardMaterial({ color: 0xf3f6f9, roughness: 0.95, metalness: 0 })
     );
     deck.position.y = -4.5; deck.receiveShadow = true;
@@ -267,7 +282,7 @@ export class City {
     this.deck = deck;
 
     this.skirt = new THREE.Mesh(
-      new THREE.BoxGeometry(CAP * 1.035, 3.2, CAP * 1.035),
+      new THREE.CylinderGeometry(CAP * 0.535, CAP * 0.515, 3.2, 48),
       new THREE.MeshStandardMaterial({
         color: 0x27aae1, roughness: 0.45, metalness: 0.2,
         emissive: 0x1176a3, emissiveIntensity: 0.35
@@ -431,7 +446,7 @@ export class City {
     this.districts.forEach((d) => {
       const repo = d.repo;
       if (!repo || !repo.platforms) return;
-      const from = new THREE.Vector3(d.x + d.w / 2, MAX_H * 0.7, d.y + d.h / 2);
+      const from = new THREE.Vector3(d.cx, MAX_H * 0.7, d.cz);
       repo.platforms.forEach((pid) => {
         const hub = hubs.find((h) => h.id === pid);
         if (!hub) return;
@@ -601,40 +616,63 @@ export class City {
   }
 
   _buildEstate(incremental) {
-    if (!incremental) this._setPlate(CAP);
-    if (!incremental || !this._estateCells) {
+    if (!incremental) {
+      this._setPlate(CAP);
       const val = (r) => 0.4 + Math.log10(1 + (r.bytes || 0));
       const groups = this.types
         .map((t) => ({ id: t.id, repos: this.repos.filter((r) => r.type === t.id).sort((a, b) => val(b) - val(a)) }))
         .filter((g) => g.repos.length)
         .map((g) => ({ ...g, value: g.repos.reduce((s, r) => s + val(r), 0) }))
         .sort((a, b) => b.value - a.value);
-      const typeCells = [];
-      squarify(groups, -CAP / 2, -CAP / 2, CAP, CAP, typeCells);
+
+      /* the estate is an island, not a slab */
+      const island = blobPolygon(CAP * 0.48, 26, 0.16, 0x0BB1E5);
+      seedPlan(0x0BB1E5);
       this._estateCells = [];
-      typeCells.forEach((tc) => {
-        const cells = [];
-        squarify(tc.item.repos.map((r) => ({ repo: r, value: val(r) })),
-          tc.x + 2, tc.y + 2, Math.max(1, tc.w - 4), Math.max(1, tc.h - 4), cells);
-        cells.forEach((c) => this._estateCells.push({ cell: c, type: tc.item.id }));
-      });
+      layoutPoly(island, groups, (g, quarterPoly) => {
+        /* each type gets a quarter of the city; repos are its blocks */
+        layoutPoly(quarterPoly, g.repos.map((r) => ({ repo: r, value: val(r) })),
+          (it, plot) => this._estateCells.push({ plot, type: g.id, repo: it.repo }),
+          { pad: 2.0, leafPad: 1.4, jitter: 0.5 });
+      }, { pad: 4.0, leafPad: 3.0, jitter: 0.34 });
     }
     this._estateCells.forEach((e) => {
-      const repo = e.cell.item.repo;
-      if (this.districts.some((d) => d.key === repo.name)) return;
-      const root = this.roots.get(repo.name);
+      if (this.districts.some((d) => d.key === e.repo.name)) return;
+      const root = this.roots.get(e.repo.name);
       if (!root) return;                            /* tree hasn't landed yet */
+      /* Out here a repo's plot is a few units across: 640 individual files
+         in it is a smear. Show its principal buildings and let the count on
+         the label carry the rest — going in shows everything. */
       const cells = [];
-      layoutTree(root, e.cell.x, e.cell.y, e.cell.w, e.cell.h, 0, cells);
+      const top = flattenTop(root, 14);
+      layoutPoly(e.plot, top.map((f) => ({ file: f, value: f.value })),
+        (it, plot) => cells.push({ file: it.file, site: plotToSite(plot) }),
+        { pad: 0.6, leafPad: 0.35, jitter: 0.6 });
+      if (!cells.length) return;
       this._addDistrict({
-        key: repo.name,
-        label: repo.isSnippet ? repo.label : repo.name,
+        key: e.repo.name,
+        label: e.repo.isSnippet ? e.repo.label : e.repo.name,
         color: this.typeColor[e.type] || '#27AAE1',
-        x: e.cell.x, y: e.cell.y, w: e.cell.w, h: e.cell.h,
-        target: { kind: 'repo', repo: repo.name },
-        repo, cells, colorBy: 'district', sig: this.signatures.get(repo.name)
+        plot: e.plot,
+        target: { kind: 'repo', repo: e.repo.name },
+        repo: e.repo, cells, colorBy: 'district', sig: this.signatures.get(e.repo.name)
       });
     });
+  }
+
+  /* Lay a directory subtree into a polygon: folders become sub-plots,
+     files become sites. Same recursion, organic geometry. */
+  _layoutSubtree(node, poly, out, depth = 0, cap = 0) {
+    const items = [];
+    node.dirs.forEach((d) => items.push({ kind: 'dir', node: d, value: d.value }));
+    node.files.forEach((f) => items.push({ kind: 'file', file: f, value: f.value }));
+    if (!items.length) return;
+    items.sort((a, b) => b.value - a.value);
+    const P = this.plate || CAP;
+    layoutPoly(poly, items, (it, plot) => {
+      if (it.kind === 'dir') this._layoutSubtree(it.node, plot, out, depth + 1);
+      else out.push({ file: it.file, site: plotToSite(plot) });
+    }, { pad: depth === 0 ? P * 0.010 : P * 0.005, leafPad: P * 0.004, jitter: 0.55 });
   }
 
   _buildInside() {
@@ -658,33 +696,32 @@ export class City {
 
     const P = this._plateFor(node.count);
     this._setPlate(P);
-    const pad = P * 0.012;
+    const island = blobPolygon(P * 0.47, 22, 0.14, 0x51D0C2);
+    seedPlan(0x51D0C2);
 
-    const cells = [];
-    squarify(items, -P / 2, -P / 2, P, P, cells);
-    cells.forEach((c) => {
-      const it = c.item;
+    layoutPoly(island, items, (it, plot) => {
       const inner = [];
       if (it.kind === 'dir') {
-        layoutTree(it.node, c.x, c.y, c.w, c.h, 0, inner);
+        this._layoutSubtree(it.node, plot, inner);
       } else {
-        const fc = [];
-        squarify(it.files.map((f) => ({ file: f, value: f.value })),
-          c.x + pad, c.y + pad, Math.max(0.5, c.w - pad * 2), Math.max(0.5, c.h - pad * 2), fc);
-        fc.forEach((k) => inner.push({ file: k.item.file, x: k.x, y: k.y, w: k.w, h: k.h }));
+        layoutPoly(plot, it.files.map((f) => ({ file: f, value: f.value })),
+          (x, fp) => inner.push({ file: x.file, site: plotToSite(fp) }),
+          { pad: P * 0.010, leafPad: P * 0.006, jitter: 0.55 });
       }
+      if (!inner.length) return;
+      const c = polyCentroid(plot);
       this._addDistrict({
         key: (lv.kind === 'repo' ? '' : lv.path + '/') + it.name,
         label: it.kind === 'dir' ? it.name + '/' : it.name,
         sub: it.kind === 'dir' ? it.node.count + ' files' : it.files.length + ' files',
         color: it.kind === 'dir' ? '#27AAE1' : '#8FA3B8',
-        x: c.x, y: c.y, w: c.w, h: c.h,
+        plot, centre: c,
         target: it.kind === 'dir'
           ? { kind: 'dir', repo: lv.repo, path: (lv.kind === 'repo' ? '' : lv.path + '/') + it.name }
           : null,
         repo, cells: inner, colorBy: 'file', sig: this.signatures.get(lv.repo)
       });
-    });
+    }, { pad: P * 0.020, leafPad: P * 0.014, jitter: 0.42 });
   }
 
   _addDistrict(spec) {
@@ -693,9 +730,11 @@ export class City {
     spec.cells.forEach((c) => { maxSize = Math.max(maxSize, c.file.size || 0); });
 
     const sig = spec.sig || { verticality: 1, slender: 0.9, twist: 0, crown: 1, hueShift: 0 };
+    const c = spec.centre || polyCentroid(spec.plot);
     const d = {
       key: spec.key, label: spec.label, sub: spec.sub, color: spec.color,
-      x: spec.x, y: spec.y, w: spec.w, h: spec.h,
+      plot: spec.plot, cx: c[0], cz: c[1],
+      radius: Math.max(inradiusAt(spec.plot, c), Math.sqrt(polyArea(spec.plot)) * 0.42),
       target: spec.target, repo: spec.repo, sig,
       towers: [], t0: performance.now()
     };
@@ -722,7 +761,7 @@ export class City {
       cells.forEach((c) => {
         const i = batch.n++;
         const mag = Math.pow((c.file.size || 0) / maxSize, 0.38);
-        const h = (1.6 + mag * MAX_H) * sig.verticality;
+        let h = (1.6 + mag * MAX_H) * sig.verticality;
         batch.hs[i] = h;
         const seed = (((i * 2654435761) >>> 0) % 1000) / 1000;
         batch.seeds[i] = seed;
@@ -730,17 +769,22 @@ export class City {
         col.offsetHSL(sig.hueShift, 0, 0);
         batch.mesh.setColorAt(i, col);
 
-        /* Rotating a building would push it out of its cell, so shrink the
-           footprint by exactly what the rotation costs. */
-        const rot = sig.twist * (seed - 0.5) * 2;
-        const fit = 1 / (Math.abs(Math.cos(rot)) + Math.abs(Math.sin(rot)));
-        const fw = Math.max(0.3, (c.w - 0.26) * sig.slender * fit);
-        const fd = Math.max(0.3, (c.h - 0.26) * sig.slender * fit);
-
+        /* The plot already decided where this stands and which way it
+           faces; a building is the largest square that fits inside it. */
+        const site = c.site;
+        /* Size from the plot's area, then make sure it still fits across
+           the narrow way — elongated plots have a tiny inradius but plenty
+           of ground, and sizing off the inradius alone made needles. */
+        const foot = Math.max(0.4,
+          Math.min(Math.sqrt(site.area) * 0.62, site.r * 1.9) * sig.slender);
+        /* An organic plan throws up the odd sliver plot; without this they
+           become needles rather than buildings. */
+        h = Math.min(h, foot * 7.5);
         const t = {
           file: c.file, repo: spec.repo, district: d, batch, i,
-          x: c.x + c.w / 2, z: c.y + c.h / 2,
-          w: fw, dd: fd, rot,
+          x: site.x, z: site.z,
+          w: foot, dd: foot,
+          rot: site.angle + sig.twist * (seed - 0.5),
           h, lit: 0, litTarget: 0, delay: 0,
           order: d.towers.length / Math.max(1, spec.cells.length)
         };
@@ -795,33 +839,44 @@ export class City {
 
   /* Thin coloured plate under each district — what makes the boundaries
      readable before any label has faded in. */
+  /* District plates are now the plot outlines themselves, extruded a
+     little — so the ground reads as blocks and streets, not tiles. */
   _flushPlates() {
     if (!this._plateQueue.length) return;
-    const list = this.districts;
-    if (this.plates) { this.rig.remove(this.plates); this.plates.geometry.dispose(); this.plates.dispose(); }
-    const geo = new THREE.BoxGeometry(1, 1, 1);
-    geo.translate(0, 0.5, 0);
-    this.plates = new THREE.InstancedMesh(
-      geo,
-      new THREE.MeshStandardMaterial({ roughness: 0.94, metalness: 0 }),
-      list.length
-    );
-    this.plates.receiveShadow = true;
-    this.plates.frustumCulled = false;
-    const m = new THREE.Matrix4(), q = new THREE.Quaternion();
-    const pos = new THREE.Vector3(), scl = new THREE.Vector3();
+    if (this.plates) {
+      this.rig.remove(this.plates);
+      this.plates.geometry.dispose(); this.plates.material.dispose();
+      this.plates = null;
+    }
+    const geos = [];
     const col = new THREE.Color();
-    list.forEach((d, i) => {
-      pos.set(d.x + d.w / 2, -0.55, d.y + d.h / 2);
-      scl.set(Math.max(0.5, d.w - 0.6), 0.55, Math.max(0.5, d.h - 0.6));
-      m.compose(pos, q, scl);
-      this.plates.setMatrixAt(i, m);
-      col.set(d.color).lerp(new THREE.Color(0xffffff), 0.62);
-      this.plates.setColorAt(i, col);
+    this.districts.forEach((d) => {
+      if (!d.plot || d.plot.length < 3) return;
+      const shape = new THREE.Shape();
+      d.plot.forEach((q, i) => (i ? shape.lineTo(q[0], q[1]) : shape.moveTo(q[0], q[1])));
+      shape.closePath();
+      const g = new THREE.ExtrudeGeometry(shape, { depth: 0.55, bevelEnabled: false });
+      g.rotateX(Math.PI / 2);                      /* shape is XY, the ground is XZ */
+      g.translate(0, 0, 0);
+      col.set(d.color).lerp(new THREE.Color(0xffffff), 0.66);
+      const n = g.getAttribute('position').count;
+      const c3 = new Float32Array(n * 3);
+      for (let k = 0; k < n; k++) { c3[k * 3] = col.r; c3[k * 3 + 1] = col.g; c3[k * 3 + 2] = col.b; }
+      g.setAttribute('color', new THREE.BufferAttribute(c3, 3));
+      geos.push(g);
     });
-    this.plates.instanceMatrix.needsUpdate = true;
-    if (this.plates.instanceColor) this.plates.instanceColor.needsUpdate = true;
-    this.rig.add(this.plates);
+    if (geos.length) {
+      const merged = mergeGeometries(geos, false);
+      geos.forEach((g) => g.dispose());
+      if (merged) {
+        this.plates = new THREE.Mesh(merged, new THREE.MeshStandardMaterial({
+          vertexColors: true, roughness: 0.95, metalness: 0
+        }));
+        this.plates.receiveShadow = true;
+        this.plates.position.y = -0.02;
+        this.rig.add(this.plates);
+      }
+    }
     this._plateQueue.length = 0;
   }
 
@@ -870,8 +925,8 @@ export class City {
       if (d.target) this.go(d.target); else this.focusDistrict(d);
     });
     const obj = new CSS2DObject(el);
-    obj.position.set(d.x + d.w / 2, MAX_H * 0.5, d.y + d.h / 2);
-    obj.userData = { district: d, area: d.w * d.h };
+    obj.position.set(d.cx, MAX_H * 0.5, d.cz);
+    obj.userData = { district: d, area: d.radius * d.radius };
     this.rig.add(obj);
     this.labels.push(obj);
   }
@@ -883,8 +938,7 @@ export class City {
 
   focusDistrict(d) {
     this.selected = d.key;
-    this._flyTo(new THREE.Vector3(d.x + d.w / 2, MAX_H * 0.35, d.y + d.h / 2),
-      Math.max(30, Math.hypot(d.w, d.h) * 1.5));
+    this._flyTo(new THREE.Vector3(d.cx, MAX_H * 0.35, d.cz), Math.max(30, d.radius * 3.0));
   }
 
   focus(name) {
@@ -919,8 +973,8 @@ export class City {
     if (!hits.length || hits.length === this.districts.length) { this.resetView(true); return; }
     const box = new THREE.Box3();
     hits.forEach((d) => {
-      box.expandByPoint(new THREE.Vector3(d.x, 0, d.y));
-      box.expandByPoint(new THREE.Vector3(d.x + d.w, MAX_H, d.y + d.h));
+      box.expandByPoint(new THREE.Vector3(d.cx - d.radius, 0, d.cz - d.radius));
+      box.expandByPoint(new THREE.Vector3(d.cx + d.radius, MAX_H, d.cz + d.radius));
     });
     const c = box.getCenter(new THREE.Vector3());
     const radius = Math.max(box.getSize(new THREE.Vector3()).length() * 0.5, 30);
@@ -952,6 +1006,109 @@ export class City {
       fromT: this.controls.target.clone(), toT: target.clone(),
       fromP: this.camera.position.clone(), toP: target.clone().addScaledVector(dir, dist)
     };
+  }
+
+  /* ================================================================
+     WALK — street level, first person.
+     ----------------------------------------------------------------
+     Orbit tells you the shape of the estate; walking tells you what it
+     feels like to be inside it. Pointer lock for the look, WASD for the
+     feet, and collision against the building footprints so you go down
+     the streets rather than through the walls.
+     ================================================================ */
+  enterWalk() {
+    if (this.walking) return;
+    if (!this.fp) {
+      this.fp = new PointerLockControls(this.camera, this.renderer.domElement);
+      this.scene.add(this.fp.object);
+      this.keys = {};
+      this._onKey = (e) => {
+        const k = e.code;
+        if (['KeyW','KeyA','KeyS','KeyD','ArrowUp','ArrowDown','ArrowLeft','ArrowRight','ShiftLeft','Space'].indexOf(k) < 0) return;
+        this.keys[k] = e.type === 'keydown';
+        e.preventDefault();
+      };
+      this.fp.addEventListener('unlock', () => { if (this.walking) this.exitWalk(); });
+    }
+    /* stand on the street nearest where the camera was looking */
+    const t = this.controls.target;
+    const spot = this._freeSpotNear(t.x, t.z);
+    this.walking = true;
+    this.controls.enabled = false;
+    this.velocity = new THREE.Vector3();
+    this.camera.position.set(spot.x, WALK_EYE, spot.z);
+    this.camera.lookAt(t.x + (t.x - spot.x), WALK_EYE, t.z + (t.z - spot.z));
+    this.camera.near = 0.35;
+    this.camera.updateProjectionMatrix();
+    document.addEventListener('keydown', this._onKey);
+    document.addEventListener('keyup', this._onKey);
+    this.fp.lock();
+    this.onWalk(true);
+  }
+
+  exitWalk() {
+    if (!this.walking) return;
+    this.walking = false;
+    this.keys = {};
+    document.removeEventListener('keydown', this._onKey);
+    document.removeEventListener('keyup', this._onKey);
+    if (this.fp && this.fp.isLocked) this.fp.unlock();
+    this.controls.enabled = true;
+    this.camera.near = 0.6;
+    this.camera.updateProjectionMatrix();
+    this.userMoved = false;
+    this.resetView();
+    this.onWalk(false);
+  }
+
+  /* Nearest point to (x,z) that isn't inside a building. */
+  _freeSpotNear(x, z) {
+    for (let ring = 0; ring < 14; ring++) {
+      const rad = ring * (this.plate || CAP) * 0.035;
+      for (let i = 0; i < Math.max(1, ring * 6); i++) {
+        const a = (i / Math.max(1, ring * 6)) * Math.PI * 2;
+        const px = x + Math.cos(a) * rad, pz = z + Math.sin(a) * rad;
+        if (!this._blocked(px, pz, 1.2)) return { x: px, z: pz };
+      }
+    }
+    return { x, z };
+  }
+
+  _blocked(x, z, pad) {
+    for (const d of this.districts) {
+      if (Math.hypot(x - d.cx, z - d.cz) > d.radius + 14) continue;   /* cheap reject */
+      for (const t of d.towers) {
+        const half = t.w * 0.5 + pad;
+        if (Math.abs(x - t.x) < half && Math.abs(z - t.z) < half) return true;
+      }
+    }
+    return false;
+  }
+
+  _stepWalk(dt) {
+    const speed = (this.keys.ShiftLeft ? 42 : 20) * dt;
+    let f = 0, r = 0;
+    if (this.keys.KeyW || this.keys.ArrowUp) f += 1;
+    if (this.keys.KeyS || this.keys.ArrowDown) f -= 1;
+    if (this.keys.KeyD || this.keys.ArrowRight) r += 1;
+    if (this.keys.KeyA || this.keys.ArrowLeft) r -= 1;
+    if (!f && !r) return;
+
+    const dir = new THREE.Vector3();
+    this.camera.getWorldDirection(dir);
+    dir.y = 0; dir.normalize();
+    const side = new THREE.Vector3().crossVectors(dir, new THREE.Vector3(0, 1, 0)).normalize();
+    const step = dir.multiplyScalar(f).add(side.multiplyScalar(r)).normalize().multiplyScalar(speed);
+
+    /* slide along walls instead of sticking to them */
+    const p = this.camera.position;
+    if (!this._blocked(p.x + step.x, p.z, 1.0)) p.x += step.x;
+    if (!this._blocked(p.x, p.z + step.z, 1.0)) p.z += step.z;
+
+    const lim = (this.plate || CAP) * 0.54;
+    const d = Math.hypot(p.x, p.z);
+    if (d > lim) { p.x *= lim / d; p.z *= lim / d; }
+    p.y = WALK_EYE;
   }
 
   /* ================= interaction ================= */
@@ -1052,7 +1209,11 @@ export class City {
     requestAnimationFrame(() => this._loop());
     const now = performance.now();
 
-    if (this.flight) {
+    if (this.walking) {
+      const dt = Math.min(0.05, (now - (this._lastWalk || now)) / 1000);
+      this._lastWalk = now;
+      this._stepWalk(dt);
+    } else if (this.flight) {
       const f = this.flight;
       const t = Math.min(1, (now - f.t0) / f.ms);
       const e = easeInOut(t);
@@ -1064,7 +1225,7 @@ export class City {
       p.applyAxisAngle(new THREE.Vector3(0, 1, 0), 0.00025);
       this.camera.position.copy(this.controls.target).add(p);
     }
-    this.controls.update();
+    if (!this.walking) this.controls.update();
 
     if (this.wave) {
       const age = (now - this.wave.t0) / 950;
@@ -1094,7 +1255,21 @@ export class City {
       if (dirty) b.litAttr.needsUpdate = true;
     });
 
-    if (this.hasPointer && !this.flight) this._pick();
+    if (this.hasPointer && !this.flight && !this.walking) this._pick();
+
+    /* On the street you want to know what's around you, not the whole
+       city's index — so walking names only what's within earshot. */
+    if (this.walking) {
+      const cx = this.camera.position.x, cz = this.camera.position.z;
+      this.labels.forEach((o) => {
+        const near = Math.hypot(o.position.x - cx, o.position.z - cz) < 46;
+        o.element.style.opacity = near ? 1 : 0;
+        o.element.style.pointerEvents = 'none';
+      });
+      this.composer.render();
+      this.labelRenderer.render(this.scene, this.camera);
+      return;
+    }
 
     const dist = this.camera.position.distanceTo(this.controls.target);
     const k = Math.round(THREE.MathUtils.clamp(1800 / Math.max(dist, 1), 5, 42));
@@ -1121,8 +1296,11 @@ export class City {
     this.batches.clear();
     this._plateQueue = [];
     if (this.plates) {
-      this.rig.remove(this.plates); this.plates.geometry.dispose();
-      this.plates.material.dispose(); this.plates.dispose(); this.plates = null;
+      /* a merged Mesh, not an InstancedMesh — there is no .dispose() on it */
+      this.rig.remove(this.plates);
+      this.plates.geometry.dispose();
+      this.plates.material.dispose();
+      this.plates = null;
     }
     this.labels.forEach((o) => { this.rig.remove(o); if (o.element.parentNode) o.element.remove(); });
     this.districts = []; this.labels = [];

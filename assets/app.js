@@ -1655,6 +1655,12 @@ window.CBHub = {
   focus: function (n) { if (window.CBCity) window.CBCity.focus(n); },
   openFile: openFileSource,
   onLevel: renderCrumbs,
+  onWalk: function (on) {
+    document.body.setAttribute('data-walk', on ? '1' : '0');
+    $('#walk-hud').hidden = !on;
+    $('#hud').hidden = on;
+    if (on) renderInspector(null);
+  },
   linkPlatforms: buildCityLinks,
   worldReady: function () { WORLD_OK = true; renderHudLegend(); renderHudFigures(); },
   noWorld: function () {
@@ -2060,6 +2066,9 @@ function wireWorldHud() {
   $$('#modeswitch button').forEach(function (b) {
     b.addEventListener('click', function () { setMode(b.getAttribute('data-mode')); });
   });
+  $('#walk-toggle').addEventListener('click', function () {
+    if (window.CBCity) window.CBCity.enterWalk();
+  });
   $('#links-toggle').addEventListener('click', function () {
     LINKS_ON = !LINKS_ON;
     this.setAttribute('aria-pressed', LINKS_ON ? 'true' : 'false');
@@ -2091,6 +2100,7 @@ function wireWorldHud() {
   document.addEventListener('keydown', function (e) {
     if (e.key !== 'Escape' || MODE !== 'world') return;
     if ($('#modal').getAttribute('data-open') === '1') return;
+    if (window.CBCity && window.CBCity.walking) { window.CBCity.exitWalk(); return; }
     if (!$('#inspector').hidden) {
       renderInspector(null);
       if (window.CBCity) window.CBCity.clearSelection();

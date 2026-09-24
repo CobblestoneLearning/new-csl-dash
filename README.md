@@ -46,7 +46,13 @@ pediments, statues) and which parts a building gets is derived:
 | **family** | file type — `php` → monolith, `js` → tapered tower, `css` → hall, `html` → pitched house, data → silo, docs → stele, images → domed pavilion, fonts → spire, scripts → industrial works, media → drum |
 | **tier** | size percentile *within its own repo* — plain → colonnade → + arcade of arches → + flying buttresses |
 | **crown** | name and type — flat, pediment, dome, lantern, spire, **statue** |
+| **statue** | the file-type icon itself, extruded to 3D and stood on a plinth |
 | **landmark** | the biggest file in each district is always fully ornate and always crowned |
+
+There is almost no SVG in the estate to carve from — **one usable file across 109 repos**, and 13
+images in total — so the statues are the *file-type icons*, extruded through `SVGLoader` into real
+3D monuments. That's better than repo artwork would have been: the monument on a landmark tells
+you what kind of file it is.
 
 So a single-file snippet becomes a statue on a colonnaded plinth; a 400 KB vendor class becomes a
 buttressed monolith under a lantern; a buried partial stays a plain shaft. Files named
@@ -55,6 +61,27 @@ buttressed monolith under a lantern; a buried partial stays a plain shaft. Files
 Geometry is generated **per variant, not per building** — 60 distinct forms instanced across
 2,427 buildings, so the variety is free at draw time. Every variant is normalised into one
 contract (footprint ±0.5, base y=0, apex y=1) so a single instance matrix places any of them.
+
+### The plan is organic, not a grid
+
+A squarified treemap is area-accurate and unmistakably a grid — every street at a right angle,
+every plot axis-aligned. `assets/plan.js` keeps the accuracy and throws away the grid: a plot is a
+convex polygon, split by a single straight cut chosen across its longest axis and then jittered,
+with the cut's offset binary-searched until each side holds its right share of the area. Recurse.
+
+Streets come from insetting a block **once** on entry, plus a small gap at the leaves. The estate
+sits on an island outline rather than a square slab, and each building faces its plot's longest
+edge — so it addresses the street rather than facing north.
+
+At estate level each repo shows its **principal buildings** (biggest 14 files) rather than all of
+them: 109 plots a few units across can't carry 2,427 buildings legibly, and going into a repo
+shows everything anyway.
+
+### Walking the streets
+
+**Walk the streets** drops you to eye height in first person — pointer lock for the look, WASD to
+move, shift to run, collision against building footprints so you go down the streets rather than
+through the walls, and `esc` to fly back up. Labels switch to naming only what's within earshot.
 
 ### Connections
 

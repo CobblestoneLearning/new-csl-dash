@@ -56,6 +56,7 @@ No build step, no package manager, no server code.
 | `assets/config.js` | **Data, not logic.** Types, purposes, platforms, sites, `CURATED`, palettes, `AUTH_CONFIG`. |
 | `assets/app.js` | All behaviour, one IIFE, numbered sections. |
 | `assets/architecture.js` | The building vocabulary: archetype geometry, file→form/colour maps, the on-screen key. |
+| `assets/plan.js` | Organic city planning — polygon subdivision, no rectangles. |
 | `assets/city.js` | The Estate: a city built from the real file trees. **ES module** — talks to app.js via `window.CBHub` + the `cb:data` event, never an import. |
 | `assets/vendor/` | three.js r169 + OrbitControls, CSS2DRenderer, and the postprocessing chain. Vendored on purpose — keep the upstream `postprocessing/` + `shaders/` folders, the addons import each other by relative path. |
 
@@ -102,6 +103,13 @@ To file a project: add a `cat-<id>` topic on GitHub *or* a `CURATED` line. Prefe
   looks right and isn't is worse than no graph.
 - **The PHP import pattern must tolerate `require_once CONST . 'path.php'`** — that's how the
   real code is written. A naive `require\s*['"]` matches almost nothing in this estate.
+- **Inset the street ONCE per block, never per split.** `layoutPoly`'s binary recursion is how we
+  subdivide, not a level of the city; an inset per split compounds (0.7^6 ≈ 12%) and eats the block.
+- **Always cut ACROSS the long axis.** Cutting along it spans the full length and turns the
+  smaller share into a sliver, which collapses its inradius and every building it carries.
+- **Size buildings from plot AREA, with inradius only as a fit check.** An elongated plot has
+  plenty of ground but a tiny inradius; sizing off inradius alone made needles.
+- **`plates` is a merged Mesh, not an InstancedMesh** — it has no `.dispose()`.
 - **The city is optional, always.** `mountCity()` returns null with no WebGL, and List mode must
   still be complete. Never let a control or a piece of data live only inside `city.js`.
 - **The city is made of `git/trees`, one call per repo**, cached in `sessionStorage` against
